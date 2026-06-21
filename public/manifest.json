@@ -1,0 +1,17 @@
+{
+  "name": "MunchPick",
+  "short_name": "MunchPick",
+  "description": "AI-powered decision companion that picks for you and reinforces confidence.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#FFF9F5",
+  "theme_color": "#8FD9A8",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
