@@ -114,7 +114,8 @@ describe('Gemini Integration & Fallback Tests', () => {
         selected_option: 'Buy shoes',
         reasoning: 'Reason one and Reason two.',
         encouragement: 'Supportive statement! 🎉',
-        follow_up_question: 'How do you feel?'
+        follow_up_question: 'How do you feel?',
+        mascot: 'ollie'
       }
 
       mockGenerateContent.mockResolvedValueOnce({
@@ -128,6 +129,7 @@ describe('Gemini Integration & Fallback Tests', () => {
       expect(result.reasoning).toBe('Reason one and Reason two.')
       expect(result.encouragement).toContain('🎉')
       expect(result.follow_up_question).toBe('How do you feel?')
+      expect(result.mascot).toBe('ollie')
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     })
 

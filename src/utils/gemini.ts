@@ -28,6 +28,7 @@ export interface ReinforcementResult {
   reasoning: string
   encouragement: string
   follow_up_question: string
+  mascot: string
 }
 
 // Timeout helper
@@ -115,7 +116,7 @@ export async function generateReinforcement(
 ): Promise<ReinforcementResult> {
   const genAI = getGenAI()
   if (!genAI) {
-    return getFallbackReinforcement(selectedOption, category)
+    return getFallbackReinforcement(selectedOption, category, context)
   }
 
   const prompt = `
@@ -123,6 +124,18 @@ You are Munch 🍀, a gentle four-leaf clover companion that helps Navi slow dow
 You are not an assistant, analyst, coach, productivity tool, or decision optimizer.
 Your core philosophy is: "I am not here to decide for you. I am here to help you hear yourself more clearly."
 Your purpose is to help Navi feel understood, quiet the noise in her mind, and find a cozy path forward.
+
+Mascots in Munch:
+Navi is guided by 9 distinct mascots, each representing a specific feeling/mood:
+* 'munch': Understanding (default mascot)
+* 'ollie': Reflection (thoughtful, study, reflective, analyzing options)
+* 'ellie': Reassurance (anxious, in doubt, second-guessing, unsure)
+* 'pandy': Comfort (tired, sad, looking for cozy warmth)
+* 'dobby': Encouragement (needs motivation, starting energy, activity)
+* 'coco': Curiosity (exploring new things, curious)
+* 'froggy': Calm (overwhelmed, stressed, busy, chaotic)
+* 'bubbles': Openness (relaxed, open-minded, flexible)
+* 'chicky': Joy (happy, celebrating positive steps)
 
 Core Principles:
 * Slow down and reduce overthinking.
@@ -149,6 +162,7 @@ Ask yourself:
 - Which path aligns with what brings her comfort?
 - Which path reduces friction and quietens the mind?
 - Which option feels like a gentle starting point?
+- Which of the 9 mascots best matches Navi's emotional state right now? If she is overwhelmed/stressed, select 'froggy'. If she is doubting or anxious, select 'ellie'. If she needs encouragement, select 'dobby'.
 
 Response Rules:
 - NEVER use words like: AI, analysis, insights, recommendations, scores, optimization, productivity, best choice, optimal.
@@ -168,7 +182,8 @@ You MUST return a JSON response with the following keys:
   "selected_option": "${selectedOption}",
   "reasoning": "A warm, natural explanation of why this choice feels right for Navi, focusing on comfort, quietness of mind, or ease of starting.",
   "encouragement": "A gentle, supportive closing line to help her feel at peace.",
-  "follow_up_question": "A simple, friendly question checking in on how she feels about this path."
+  "follow_up_question": "A simple, friendly question checking in on how she feels about this path.",
+  "mascot": "munch" | "ollie" | "ellie" | "pandy" | "dobby" | "coco" | "froggy" | "bubbles" | "chicky"
 }
 `
 
@@ -188,10 +203,18 @@ You MUST return a JSON response with the following keys:
     )
 
     const text = response.response.text()
-    return JSON.parse(text) as ReinforcementResult
+    const parsed = JSON.parse(text) as ReinforcementResult
+    
+    // Validate mascot
+    const validMascots = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky']
+    if (!validMascots.includes(parsed.mascot)) {
+      parsed.mascot = detectMascotFromContext(context?.emotionalState, context?.currentContext)
+    }
+
+    return parsed
   } catch (error) {
     console.error("Gemini reinforcement generation failed, running fallback pipeline:", error)
-    return getFallbackReinforcement(selectedOption, category)
+    return getFallbackReinforcement(selectedOption, category, context)
   }
 }
 
@@ -228,8 +251,42 @@ function getFallbackClassification(options: string[]): ClassificationResult {
   }
 }
 
+// Detect fallback mascot based on text context keywords
+function detectMascotFromContext(emotionalState = '', currentContext = ''): string {
+  const combined = `${emotionalState} ${currentContext}`.toLowerCase()
+  if (/overwhelm|stress|busy|chaotic|hectic|tired|exhaust/i.test(combined)) {
+    return 'froggy'
+  }
+  if (/doubt|anxious|anxiety|worry|second-guess|unsure|scared|fear/i.test(combined)) {
+    return 'ellie'
+  }
+  if (/encourage|motivate|lazy|procrastinat|start|begin|work|study/i.test(combined)) {
+    return 'dobby'
+  }
+  if (/tired|sad|comfort|unhappy|cozy|hurt/i.test(combined)) {
+    return 'pandy'
+  }
+  if (/curious|explore|new|interest|learn/i.test(combined)) {
+    return 'coco'
+  }
+  if (/reflect|think|thoughtful|ponder/i.test(combined)) {
+    return 'ollie'
+  }
+  if (/open|relax|flexible|simple|easy/i.test(combined)) {
+    return 'bubbles'
+  }
+  if (/happy|joy|excite|celebrat|great|good/i.test(combined)) {
+    return 'chicky'
+  }
+  return 'munch'
+}
+
 // Fallback logic for Reinforcement
-function getFallbackReinforcement(selectedOption: string, category: Category): ReinforcementResult {
+function getFallbackReinforcement(
+  selectedOption: string, 
+  category: Category,
+  context?: { emotionalState?: string; currentContext?: string }
+): ReinforcementResult {
   const genericReasons: Record<Category, { reasoning: string; encouragement: string; follow_up_question: string }> = {
     Food: {
       reasoning: "Taking a moment for a cozy meal feels like a beautiful way to care for yourself today. We don't need to hurry or stress—just enjoying something warm is a wonderful place to start.",
@@ -259,10 +316,13 @@ function getFallbackReinforcement(selectedOption: string, category: Category): R
   }
 
   const fallback = genericReasons[category] || genericReasons.Other
+  const mascot = detectMascotFromContext(context?.emotionalState, context?.currentContext)
+
   return {
     selected_option: selectedOption,
     reasoning: fallback.reasoning,
     encouragement: fallback.encouragement,
-    follow_up_question: fallback.follow_up_question
+    follow_up_question: fallback.follow_up_question,
+    mascot
   }
 }

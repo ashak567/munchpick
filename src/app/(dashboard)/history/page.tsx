@@ -16,6 +16,7 @@ import {
   Heart,
   Meh
 } from 'lucide-react'
+import Mascot, { type MascotCharacter } from '@/components/Mascot'
 
 interface OptionDetail {
   text: string
@@ -32,6 +33,7 @@ interface DecisionHistoryItem {
   createdAt: string
   options: OptionDetail[]
   rating: 'love' | 'okay' | 'meh' | null
+  mascot: string
 }
 
 const CATEGORY_META: Record<string, { emoji: string; bg: string; text: string }> = {
@@ -265,10 +267,13 @@ export default function HistoryPage() {
                         {/* Summary Row */}
                         <div className="p-4 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            {/* Category Badge Icon */}
-                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${meta.bg} ${meta.text} font-bold text-base shadow-inner`}>
-                              {meta.emoji}
-                            </span>
+                            {/* Dynamic Feeling Mascot Icon */}
+                            <Mascot 
+                              character={item.mascot as MascotCharacter || 'munch'} 
+                              expression="idle" 
+                              size="sm" 
+                              className="flex-shrink-0" 
+                            />
                             <div className="min-w-0">
                               <h4 className="font-display font-extrabold text-sm text-charcoal leading-tight truncate max-w-[160px] sm:max-w-[200px]">
                                 {item.selectedOption}
@@ -312,7 +317,12 @@ export default function HistoryPage() {
                           <div className="px-4 pb-4 pt-1 border-t border-charcoal/5 bg-cream/40 space-y-4 animate-fade-in">
                             {/* Reinforcement */}
                             <div className="bg-white/80 border border-white rounded-xl p-3 flex gap-2.5 items-start">
-                              <span className="text-base mt-0.5">🍀</span>
+                              <Mascot 
+                                character={item.mascot as MascotCharacter || 'munch'} 
+                                expression="idle" 
+                                size="sm" 
+                                className="flex-shrink-0 mt-0.5" 
+                              />
                               <div>
                                 <h5 className="text-[10px] font-bold uppercase tracking-wider text-charcoal/50">Munch's Reflections</h5>
                                 <p className="text-xs text-charcoal/80 italic mt-0.5">

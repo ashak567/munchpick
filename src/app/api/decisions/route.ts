@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
         reasoning: reinforcement.reasoning,
         encouragement: reinforcement.encouragement,
         follow_up_question: reinforcement.follow_up_question,
+        mascot: reinforcement.mascot || 'munch',
       })
       .select()
       .single()
@@ -209,11 +210,13 @@ export async function POST(request: NextRequest) {
         text: selectedOption.text,
         tags: selectedOption.tags,
       },
+      mascot: decisionRecord.mascot || reinforcement.mascot || 'munch',
       reinforcement: {
         selected_option: reinforcement.selected_option,
         reasoning: reinforcement.reasoning,
         encouragement: reinforcement.encouragement,
         follow_up_question: reinforcement.follow_up_question,
+        mascot: reinforcement.mascot || 'munch',
         // Compatibility fields for any legacy frontend code
         reasons: [reinforcement.reasoning],
         message: reinforcement.encouragement,
@@ -252,7 +255,7 @@ export async function GET(request: NextRequest) {
     // 3. Fetch decisions paginated
     const { data: decisions, error: decisionsError, count } = await supabase
       .from('decisions')
-      .select('id, category, selected_option, reinforcement_message, reasoning, encouragement, follow_up_question, created_at', { count: 'exact' })
+      .select('id, category, selected_option, reinforcement_message, reasoning, encouragement, follow_up_question, mascot, created_at', { count: 'exact' })
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -322,6 +325,7 @@ export async function GET(request: NextRequest) {
       reasoning: d.reasoning,
       encouragement: d.encouragement,
       followUpQuestion: d.follow_up_question,
+      mascot: d.mascot || 'munch',
       createdAt: d.created_at,
       options: optionsMap[d.id] || [],
       rating: feedbackMap[d.id] || null,

@@ -31,7 +31,7 @@ export default async function DashboardPage() {
         <div className="absolute -bottom-12 -left-12 w-24 h-24 rounded-full bg-secondary/20 blur-xl" />
 
         {/* Waving Mascot */}
-        <Mascot character="general" expression="happy" size="xl" className="mb-4" />
+        <Mascot character="munch" expression="happy" size="xl" className="mb-4" />
 
         <h3 className="font-display font-bold text-xl text-charcoal mb-2">
           What is on your mind?

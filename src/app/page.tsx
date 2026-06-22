@@ -13,11 +13,15 @@ export default async function LandingPage() {
   const isLoggedIn = !!user
 
   const mascotTeam = [
-    { name: 'Munch 🍀', role: 'Gentle Guide', character: 'general' as const, bg: 'bg-white/60', description: 'Quiets the noise in your mind' },
-    { name: 'Chef Munch 🍕', role: 'Food Companion', character: 'chef' as const, bg: 'bg-primary/10', description: 'Explores what you feel like eating' },
-    { name: 'Showtime Munch 🍿', role: 'Leisure Friend', character: 'showtime' as const, bg: 'bg-secondary/10', description: 'Finds a cozy way to unwind' },
-    { name: 'Coach Munch 🏃‍♂️', role: 'Cheerleader', character: 'coach' as const, bg: 'bg-yellow/10', description: 'Helps take the first gentle step' },
-    { name: 'Shopper Munch 🛍️', role: 'Shopping Buddy', character: 'shopper' as const, bg: 'bg-coral/10', description: 'Seeks what brings you comfort' }
+    { name: 'Munch 🍀', role: 'Understanding', character: 'munch' as const, bg: 'bg-white/60', description: 'Gently quiets the noise in your mind' },
+    { name: 'Froggy 🐸', role: 'Calm', character: 'froggy' as const, bg: 'bg-primary/10', description: 'Helps you slow down when overwhelmed' },
+    { name: 'Ellie 🐘', role: 'Reassurance', character: 'ellie' as const, bg: 'bg-secondary/10', description: 'Comforts you when second-guessing' },
+    { name: 'Dobby 🐶', role: 'Encouragement', character: 'dobby' as const, bg: 'bg-yellow/10', description: 'Inspires you to take the first step' },
+    { name: 'Chicky 🐥', role: 'Joy', character: 'chicky' as const, bg: 'bg-coral/10', description: 'Celebrates your completed choices' },
+    { name: 'Pandy 🐼', role: 'Comfort', character: 'pandy' as const, bg: 'bg-white/70', description: 'Brings warmth when you feel tired' },
+    { name: 'Ollie 🦉', role: 'Reflection', character: 'ollie' as const, bg: 'bg-secondary/20', description: 'Sits with you in quiet thought' },
+    { name: 'Coco 🐱', role: 'Curiosity', character: 'coco' as const, bg: 'bg-yellow/20', description: 'Sparkles a playful interest in new paths' },
+    { name: 'Bubbles 🐟', role: 'Openness', character: 'bubbles' as const, bg: 'bg-primary/20', description: 'Keeps your options light and open' }
   ]
 
   const testimonials = [

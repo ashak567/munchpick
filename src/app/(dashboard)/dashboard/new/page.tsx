@@ -95,6 +95,9 @@ export default function NewDecisionPage() {
   const [decisionId, setDecisionId] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
+  // Active mascot state based on emotion/context
+  const [activeMascot, setActiveMascot] = useState<MascotCharacter>('munch')
+  
   // Feedback State
   const [feedbackRating, setFeedbackRating] = useState<string | null>(null)
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false)
@@ -124,22 +127,13 @@ export default function NewDecisionPage() {
       }
 
       setFeedbackSubmitted(true)
+      setActiveMascot('chicky') // Set mascot to Chicky (Joy) when decision is completed!
     } catch (err) {
       console.error('Feedback submit failed:', err)
       setFeedbackSubmitted(true)
+      setActiveMascot('chicky')
     } finally {
       setSubmittingFeedback(false)
-    }
-  }
-
-  // Map category to mascot character
-  const getMascotCharacter = (): MascotCharacter => {
-    switch (detectedCategory) {
-      case 'Food': return 'chef'
-      case 'Entertainment': return 'showtime'
-      case 'Activities': return 'coach'
-      case 'Shopping': return 'shopper'
-      default: return 'general'
     }
   }
 
@@ -231,6 +225,7 @@ export default function NewDecisionPage() {
     if (options.length < 2) return
 
     setStep('SELECTING')
+    setActiveMascot('munch') // reset to munch during selecting animation
     setFeedbackRating(null)
     setFeedbackSubmitted(false)
     setSubmittingFeedback(false)
@@ -305,6 +300,7 @@ export default function NewDecisionPage() {
       setDetectedCategory(apiResponse.category)
       setReinforcement(apiResponse.reinforcement)
       setDecisionId(apiResponse.id)
+      setActiveMascot((apiResponse.mascot || apiResponse.reinforcement?.mascot || 'munch') as MascotCharacter)
       setStep('RESULT')
     } catch (err: any) {
       clearInterval(shuffleInterval)
@@ -507,7 +503,7 @@ export default function NewDecisionPage() {
           <div className="flex-grow flex flex-col items-center justify-center py-12 text-center">
             
             {/* Mascot Shuffling Eyes */}
-            <Mascot character="general" expression="think" size="xl" className="mb-8" />
+            <Mascot character="munch" expression="think" size="xl" className="mb-8" />
 
             {/* Shuffling Options Board */}
             <div className="w-full max-w-sm px-4">
@@ -544,7 +540,7 @@ export default function NewDecisionPage() {
               <div className="flex gap-4 items-start">
                 <div className="flex-shrink-0 mt-1">
                   <Mascot 
-                    character={getMascotCharacter()} 
+                    character={activeMascot} 
                     expression={getMascotExpression()} 
                     size="md" 
                   />

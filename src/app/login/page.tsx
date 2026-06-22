@@ -82,7 +82,7 @@ function LoginForm() {
     <div className="glass-panel rounded-3xl p-8 shadow-xl">
       {/* Mascot Greeting */}
       <div className="flex items-center gap-4 bg-white/50 border border-white/60 rounded-2xl p-4 mb-6 relative overflow-hidden">
-        <Mascot character="general" expression="idle" size="sm" className="flex-shrink-0" />
+        <Mascot character="munch" expression="idle" size="sm" className="flex-shrink-0" />
         <div className="flex-1">
           <h4 className="font-display font-bold text-sm text-charcoal">Welcome back!</h4>
           <p className="text-xs text-charcoal/80 leading-snug">
