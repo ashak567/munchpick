@@ -1,4 +1,7 @@
-import React from 'react'
+'use client'
+ 
+import React, { useState, useEffect } from 'react'
+import { getMascotCached } from '@/lib/assets-client'
 
 export type MascotCharacter = 'munch' | 'ollie' | 'ellie' | 'pandy' | 'dobby' | 'coco' | 'froggy' | 'bubbles' | 'chicky'
 export type MascotExpression = 'idle' | 'happy' | 'think' | 'wry'
@@ -25,6 +28,44 @@ export default function Mascot({
   className = '' 
 }: MascotProps) {
   
+  // States for custom assets loaded from Supabase storage
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    async function loadMascot() {
+      try {
+        setLoading(true)
+        const url = await getMascotCached(character)
+        if (active) {
+          if (url) {
+            setImageUrl(url)
+            setHasError(false)
+          } else {
+            setImageUrl(null)
+            setHasError(true)
+          }
+        }
+      } catch (err) {
+        console.warn(`[Mascot Component] Failed to load mascot asset ${character}:`, err)
+        if (active) {
+          setImageUrl(null)
+          setHasError(true)
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+    loadMascot()
+    return () => {
+      active = false
+    }
+  }, [character])
+
   // Custom size string or mapping
   const sizeClass = typeof size === 'string' ? SIZE_MAP[size] : ''
   const sizeStyle = typeof size === 'number' ? { width: size, height: size } : undefined
@@ -291,13 +332,33 @@ export default function Mascot({
       className={`relative inline-block ${sizeClass} ${className}`}
       style={sizeStyle}
     >
-      <svg 
-        viewBox="0 0 100 100" 
-        className={`w-full h-full ${getAnimationClass()}`}
-        style={{ transformOrigin: 'bottom center' }}
-      >
-        {renderCharacterSVG()}
-      </svg>
+      {loading ? (
+        // Loading state: Renders the default SVG with pulse and opacity
+        <svg 
+          viewBox="0 0 100 100" 
+          className="w-full h-full animate-pulse opacity-45"
+          style={{ transformOrigin: 'bottom center' }}
+        >
+          {renderCharacterSVG()}
+        </svg>
+      ) : imageUrl && !hasError ? (
+        // Render custom PNG image from Supabase storage
+        <img 
+          src={imageUrl} 
+          alt={character} 
+          onError={() => setHasError(true)}
+          className={`w-full h-full object-contain ${getAnimationClass()}`}
+        />
+      ) : (
+        // Fallback state: Render the default SVG
+        <svg 
+          viewBox="0 0 100 100" 
+          className={`w-full h-full ${getAnimationClass()}`}
+          style={{ transformOrigin: 'bottom center' }}
+        >
+          {renderCharacterSVG()}
+        </svg>
+      )}
     </div>
   )
 }

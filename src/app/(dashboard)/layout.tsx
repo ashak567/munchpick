@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import { Sparkles, History, BarChart3, User, LogOut } from 'lucide-react'
 import BottomNav from '@/app/(dashboard)/components/BottomNav'
+import BackgroundVideo from '@/components/BackgroundVideo'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -24,7 +25,10 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const userInitial = userName.charAt(0).toUpperCase()
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-cream">
+    <div className="flex-1 flex flex-col min-h-screen bg-cream relative">
+      {/* Private Background Video Stream */}
+      <BackgroundVideo />
+
       {/* Top App Bar */}
       <header className="sticky top-0 z-40 glass-panel border-b border-white/40 px-4 py-3 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-1.5">
