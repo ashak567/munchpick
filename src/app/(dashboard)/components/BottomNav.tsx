@@ -26,7 +26,8 @@ export default function BottomNav() {
               key={item.href}
               href={item.href}
               className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 cursor-pointer group"
-            >\n              <div
+            >
+              <div
                 className={`p-1.5 rounded-lg transition-all duration-200 ${
                   isActive
                     ? 'bg-primary text-primary-dark scale-110 shadow-sm'
