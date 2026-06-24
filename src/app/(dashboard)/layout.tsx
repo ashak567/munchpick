@@ -5,6 +5,8 @@ import { createClient } from '@/utils/supabase/server'
 import BottomNav from '@/app/(dashboard)/components/BottomNav'
 import BackgroundVideo from '@/components/BackgroundVideo'
 import Envelope from '@/components/envelope/Envelope'
+import { WelcomeProvider } from '@/lib/envelope/WelcomeContext'
+import WelcomeLayoutWrapper from './components/WelcomeLayoutWrapper'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -26,41 +28,43 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const userInitial = userName.charAt(0).toUpperCase()
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-cream relative">
-      {/* Private Background Video Stream */}
-      <BackgroundVideo />
+    <WelcomeProvider>
+      <WelcomeLayoutWrapper>
+        {/* Private Background Video Stream */}
+        <BackgroundVideo />
 
-      {/* Top App Bar */}
-      <header className="sticky top-0 z-40 glass-panel border-b border-white/40 px-4 py-3 flex items-center justify-between">
-        <Link href="/dashboard" className="flex items-center gap-1.5">
-          <span className="text-2xl">🍀</span>
-          <span className="font-display text-xl font-bold text-primary-dark">
-            Munch
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-charcoal/70 hidden sm:inline">
-              Hi, <span className="font-semibold text-charcoal">{userName}</span>
+        {/* Top App Bar */}
+        <header className="sticky top-0 z-40 glass-panel border-b border-white/40 px-4 py-3 flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-1.5">
+            <span className="text-2xl">🍀</span>
+            <span className="font-display text-xl font-bold text-primary-dark">
+              Munch
             </span>
-            <div className="w-8 h-8 rounded-full bg-secondary text-secondary-dark flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm">
-              {userInitial}
+          </Link>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-charcoal/70 hidden sm:inline">
+                Hi, <span className="font-semibold text-charcoal">{userName}</span>
+              </span>
+              <div className="w-8 h-8 rounded-full bg-secondary text-secondary-dark flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm">
+                {userInitial}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col pb-24 max-w-lg mx-auto w-full px-4 pt-6">
-        {children}
-      </main>
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col pb-24 max-w-lg mx-auto w-full px-4 pt-6">
+          {children}
+        </main>
 
-      {/* Shared Bottom Navigation Component */}
-      <BottomNav />
+        {/* Shared Bottom Navigation Component */}
+        <BottomNav />
 
-      {/* Surprise Letter from Munch */}
-      <Envelope />
-    </div>
+        {/* Surprise Letter from Munch */}
+        <Envelope />
+      </WelcomeLayoutWrapper>
+    </WelcomeProvider>
   )
 }
