@@ -150,6 +150,24 @@ export class DecisionReadinessEngine implements CognitiveEngine {
       }
     }
 
+    // 4. Reflection Loop Breaker Guard
+    let consecutiveCount = context.consecutiveReflectionCount || 0;
+    if (nextState === 'Clarifying' || nextState === 'Reflection') {
+      consecutiveCount++;
+      if (consecutiveCount > 3) {
+        console.warn(`[DecisionReadiness] Maximum consecutive reflection count reached (${consecutiveCount}). Forcing transition to prevent reflection loop.`);
+        if (trace.generatedPaths && trace.generatedPaths.length >= 2) {
+          nextState = 'Emerging Paths';
+        } else {
+          nextState = 'Exploring';
+        }
+        consecutiveCount = 0;
+      }
+    } else {
+      consecutiveCount = 0;
+    }
+    context.consecutiveReflectionCount = consecutiveCount;
+
     return {
       ...trace,
       readinessScore: Number(score.toFixed(2)),

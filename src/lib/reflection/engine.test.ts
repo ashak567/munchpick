@@ -164,4 +164,177 @@ describe('Cognitive Reflected Engine System', () => {
     // High stakes job/quit keywords: 0.80 threshold
     expect(finalTrace.readinessThreshold).toBe(0.80);
   });
+
+  it('should prevent recursion if the pipeline is already running', async () => {
+    const context: ContextPackage = {
+      user_id: 'user_123',
+      user_input: 'test',
+      options: [],
+      profile_beliefs: [],
+      relevant_memories: [],
+      decision_history: [],
+      __runningPipeline: true
+    };
+    const initialTrace: CognitiveTrace = {
+      state: 'Listening',
+      emotions: [],
+      reflections: [],
+      readinessScore: 0,
+      readinessThreshold: 0,
+      mascotCharacter: 'munch',
+      mascotExpression: 'idle',
+      mascotReason: '',
+      generatedPaths: [],
+      confidence: 1.0,
+      activeTopicKey: 'general'
+    };
+
+    await expect(runCognitivePipeline([], initialTrace, context)).rejects.toThrow('Recursive pipeline call detected');
+  });
+
+  it('should skip duplicate engines', async () => {
+    const context: ContextPackage = {
+      user_id: 'user_123',
+      user_input: 'test',
+      options: [],
+      profile_beliefs: [],
+      relevant_memories: [],
+      decision_history: []
+    };
+    const initialTrace: CognitiveTrace = {
+      state: 'Listening',
+      emotions: [],
+      reflections: [],
+      readinessScore: 0,
+      readinessThreshold: 0,
+      mascotCharacter: 'munch',
+      mascotExpression: 'idle',
+      mascotReason: '',
+      generatedPaths: [],
+      confidence: 1.0,
+      activeTopicKey: 'general'
+    };
+
+    let runCount = 0;
+    const dummyEngine = {
+      name: 'Dummy Engine',
+      execute: async (trace: CognitiveTrace) => {
+        runCount++;
+        return trace;
+      }
+    };
+
+    await runCognitivePipeline([dummyEngine, dummyEngine], initialTrace, context);
+    expect(runCount).toBe(1);
+    expect(context.pipelineExecutionLogs).toContainEqual(
+      expect.objectContaining({
+        engineName: 'Dummy Engine',
+        status: 'skipped',
+        error: expect.stringContaining('already executed')
+      })
+    );
+  });
+
+  it('should enforce timeouts per engine and continue', async () => {
+    const context: ContextPackage = {
+      user_id: 'user_123',
+      user_input: 'test',
+      options: [],
+      profile_beliefs: [],
+      relevant_memories: [],
+      decision_history: []
+    };
+    const initialTrace: CognitiveTrace = {
+      state: 'Listening',
+      emotions: [],
+      reflections: [],
+      readinessScore: 0,
+      readinessThreshold: 0,
+      mascotCharacter: 'munch',
+      mascotExpression: 'idle',
+      mascotReason: '',
+      generatedPaths: [],
+      confidence: 1.0,
+      activeTopicKey: 'general'
+    };
+
+    const slowEngine = {
+      name: 'Slow Engine',
+      execute: async (trace: CognitiveTrace) => {
+        // Sleep 4000ms (exceeds 3000ms engine timeout)
+        await new Promise(resolve => setTimeout(resolve, 4000));
+        return { ...trace, mascotReason: 'slow updated' };
+      }
+    };
+
+    const fastEngine = {
+      name: 'Fast Engine',
+      execute: async (trace: CognitiveTrace) => {
+        return { ...trace, mascotReason: 'fast updated' };
+      }
+    };
+
+    const finalTrace = await runCognitivePipeline([slowEngine, fastEngine], initialTrace, context);
+    // Slow engine failed/timed out, fast engine executed and updated the trace
+    expect(finalTrace.mascotReason).toBe('fast updated');
+    expect(context.pipelineExecutionLogs).toContainEqual(
+      expect.objectContaining({
+        engineName: 'Slow Engine',
+        status: 'failed',
+        error: expect.stringContaining('timed out')
+      })
+    );
+    expect(context.pipelineExecutionLogs).toContainEqual(
+      expect.objectContaining({
+        engineName: 'Fast Engine',
+        status: 'success'
+      })
+    );
+  }, 10000); // 10s test timeout
+
+  it('should break reflection loop when consecutive count exceeds 3', async () => {
+    const context: ContextPackage = {
+      user_id: 'user_123',
+      user_input: 'some input',
+      options: [],
+      profile_beliefs: [],
+      relevant_memories: [],
+      decision_history: [],
+      consecutiveReflectionCount: 3 // already reflected 3 times
+    };
+
+    const initialTrace: CognitiveTrace = {
+      state: 'Clarifying',
+      emotions: [],
+      reflections: [],
+      readinessScore: 0,
+      readinessThreshold: 0,
+      mascotCharacter: 'munch',
+      mascotExpression: 'idle',
+      mascotReason: '',
+      generatedPaths: [],
+      confidence: 1.0,
+      activeTopicKey: 'general'
+    };
+
+    // NLU returns ambiguity, which would normally transition nextState to Clarifying
+    context.observations = [
+      {
+        agent_name: 'NLU Agent',
+        type: 'nlu',
+        key: 'ambiguities',
+        value: [{ phrase: 'vague', confidence: 0.9 }],
+        confidence: 0.9,
+        reasoning: ''
+      }
+    ];
+
+    const engine = new DecisionReadinessEngine();
+    const finalTrace = await engine.execute(initialTrace, context);
+
+    // Normally it transitions to Clarifying due to ambiguities.
+    // Since consecutiveCount = 3, it should transition to Exploring and reset count to 0.
+    expect(finalTrace.state).toBe('Exploring');
+    expect(context.consecutiveReflectionCount).toBe(0);
+  });
 });

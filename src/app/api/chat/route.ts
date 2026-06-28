@@ -3,13 +3,38 @@ import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
 import { MunchContextBuilder } from '@/lib/context/builder';
-import { runCognitivePipeline, NluEnginePlugin, EmotionEnginePlugin, MascotSpecialistEngine, ReflectionEngine } from '@/lib/reflection/engine';
+import {
+  runCognitivePipeline,
+  NluEnginePlugin,
+  EmotionEnginePlugin,
+  MascotSpecialistEngine,
+  ReflectionEngine,
+  StoryEngine,
+  StoryEventsEngine,
+  StoryProgressEngine,
+  StoryIntelligenceEngine,
+  MemoryConsolidationEngine,
+  CognitiveOrchestratorEngine,
+  PersonalityEngine,
+  ResponsePlanningEngine
+} from '@/lib/reflection/engine';
 import { DecisionReadinessEngine } from '@/lib/reflection/readiness';
 import { CognitiveTrace, ContextPackage } from '@/lib/reflection/types';
+import { SPECULATIVE_CACHE, PIPELINE_VERSION, resolveInvalidatedEngines } from '@/lib/reflection/speculative';
 import { analyzeTopics } from '@/lib/context/builder';
 import { EmotionalStateEngine } from '@/lib/emotion/state';
 import { EmotionRegulationEngine } from '@/lib/emotion/regulation';
 import { EmotionDynamicsEngine } from '@/lib/emotion/dynamics';
+
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
 
 // Initialize Gemini safely
 const getGeminiModel = () => {
@@ -211,28 +236,36 @@ export async function GET(request: NextRequest) {
 
 // POST API endpoint
 export async function POST(request: NextRequest) {
+  let supabase: any = null;
+  let activeChat: any = null;
+  let chatMetadata: any = {};
+  let userMessage: any = null;
+  let activeTopicKey = 'general';
+  let branches: any = {};
+  let finalTrace: any = null;
+
   try {
-    const supabase = await createClient();
+    supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
-    const { content } = await request.json();
+    const { content, draftId } = await request.json();
     if (!content || !content.trim()) {
       return NextResponse.json({ error: 'Content cannot be empty.' }, { status: 400 });
     }
 
     // 1. Retrieve active chat
-    let { data: activeChat } = await supabase
+    const { data: activeChatData } = await supabase
       .from('chats')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
-    if (!activeChat) {
+    if (!activeChatData) {
       // Create new chat
       const { data: newChat } = await supabase
         .from('chats')
@@ -250,11 +283,13 @@ export async function POST(request: NextRequest) {
         .select()
         .single();
       activeChat = newChat;
+    } else {
+      activeChat = activeChatData;
     }
 
-    const chatMetadata = activeChat.metadata || {};
-    let activeTopicKey = chatMetadata.activeTopicKey || 'general';
-    const branches = chatMetadata.branches || {};
+    chatMetadata = activeChat.metadata || {};
+    activeTopicKey = chatMetadata.activeTopicKey || 'general';
+    branches = chatMetadata.branches || {};
 
     // 2. Interrupt Handling: Detect topic switches
     const topicAnalysis = await analyzeTopics(content);
@@ -291,7 +326,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Save User message to Database
-    const { data: userMessage } = await supabase
+    const { data: userMsgData } = await supabase
       .from('chat_messages')
       .insert({
         chat_id: activeChat.id,
@@ -300,6 +335,7 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single();
+    userMessage = userMsgData;
 
     // 4. Fetch last 10 messages for context
     const { data: recentMessages } = await supabase
@@ -311,6 +347,49 @@ export async function POST(request: NextRequest) {
 
     const chatHistory = (recentMessages || []).reverse();
 
+    // Retrieve previous story state, progress, insights, memories, decisions, and personality from the last mascot message's nlu_metadata if present
+    let previousStoryState: any = undefined;
+    let previousStoryProgress: any = undefined;
+    let previousStoryInsight: any = undefined;
+    let previousMemoryState: any = undefined;
+    let previousCognitiveDecision: any = undefined;
+    let previousPersonalityDecision: any = undefined;
+    if (chatHistory && chatHistory.length > 0) {
+      const lastMascotMsg = [...chatHistory].reverse().find((m: any) => m.sender === 'mascot');
+      if (lastMascotMsg && lastMascotMsg.nlu_metadata) {
+        let metadata = lastMascotMsg.nlu_metadata;
+        if (typeof metadata === 'string') {
+          try {
+            metadata = JSON.parse(metadata);
+          } catch {}
+        }
+        if (metadata) {
+          if (metadata.storyState) {
+            previousStoryState = metadata.storyState;
+          }
+          if (metadata.storyProgress) {
+            previousStoryProgress = metadata.storyProgress;
+          }
+          if (metadata.storyInsight) {
+            previousStoryInsight = metadata.storyInsight;
+          }
+          if (metadata.memoryState) {
+            previousMemoryState = metadata.memoryState;
+          }
+          if (metadata.cognitiveDecision) {
+            previousCognitiveDecision = metadata.cognitiveDecision;
+          }
+          if (metadata.personalityDecision) {
+            previousPersonalityDecision = metadata.personalityDecision;
+          }
+        }
+      }
+    }
+
+    if (previousStoryState) {
+      previousStoryState.events = previousStoryState.events || [];
+    }
+
     // 5. Build context package
     const contextBuilder = new MunchContextBuilder();
     const context = await contextBuilder.buildContext({
@@ -319,6 +398,13 @@ export async function POST(request: NextRequest) {
       options: (chatMetadata.possiblePaths || []).map((p: any) => p.text)
     });
     context.chatHistory = chatHistory;
+    context.consecutiveReflectionCount = chatMetadata.consecutiveReflectionCount || 0;
+    context.previousStoryState = previousStoryState;
+    context.previousStoryProgress = previousStoryProgress;
+    context.previousStoryInsight = previousStoryInsight;
+    context.previousMemoryState = previousMemoryState;
+    context.previousCognitiveDecision = previousCognitiveDecision;
+    context.previousPersonalityDecision = previousPersonalityDecision;
 
     // 6. Initialize pipeline trace
     const initialTrace: CognitiveTrace = {
@@ -332,7 +418,13 @@ export async function POST(request: NextRequest) {
       mascotReason: '',
       generatedPaths: chatMetadata.possiblePaths || [],
       confidence: 1.0,
-      activeTopicKey
+      activeTopicKey,
+      storyState: previousStoryState,
+      storyProgress: previousStoryProgress,
+      storyInsight: previousStoryInsight,
+      memoryState: previousMemoryState,
+      cognitiveDecision: previousCognitiveDecision,
+      personalityDecision: previousPersonalityDecision
     };
 
     // 7. Run Modular Engines Plugin Pipeline
@@ -342,15 +434,56 @@ export async function POST(request: NextRequest) {
       new EmotionalStateEngine(),
       new EmotionRegulationEngine(),
       new EmotionDynamicsEngine(),
+      new StoryEngine(),
+      new StoryEventsEngine(),
+      new StoryProgressEngine(),
+      new StoryIntelligenceEngine(),
+      new MemoryConsolidationEngine(),
+      new CognitiveOrchestratorEngine(),
+      new PersonalityEngine(),
+      new ResponsePlanningEngine(),
       new ReflectionEngine(),
       new MascotSpecialistEngine(),
       new DecisionReadinessEngine()
     ];
 
-    const finalTrace = await runCognitivePipeline(pipeline, initialTrace, context);
+    let activePipeline = pipeline;
+    let traceToUse = initialTrace;
 
-    // 8. Call Gemini Voice Narrator
-    const voiceMessageText = await generateMascotVoice(finalTrace, context);
+    if (draftId) {
+      const cached = SPECULATIVE_CACHE.get(draftId);
+      if (cached && cached.pipelineVersion === PIPELINE_VERSION) {
+        const invalidatedEngines = resolveInvalidatedEngines(cached.draft, content);
+        
+        // In speculative cache hit, initialTrace is seeded with the cached speculative trace
+        const cachedTrace = cached.cognitiveTrace;
+        cachedTrace.generatedPaths = initialTrace.generatedPaths; // keep paths
+        
+        traceToUse = cachedTrace;
+        activePipeline = pipeline.filter(engine => invalidatedEngines.has(engine.name));
+      }
+      SPECULATIVE_CACHE.delete(draftId);
+    }
+
+    finalTrace = await runCognitivePipeline(activePipeline, traceToUse, context);
+
+    // 8. Call Gemini Voice Narrator with timeout and invocation guard
+    let narratorInvoked = false;
+    const invokeNarrator = async () => {
+      if (narratorInvoked) {
+        throw new Error('[NarratorGuard] Narrator was already invoked in this request cycle!');
+      }
+      narratorInvoked = true;
+      const voicePromise = generateMascotVoice(finalTrace, context);
+      return withTimeout(voicePromise, 5000, 'Narrator voice generation timed out after 5000ms');
+    };
+
+    const voiceMessageText = await invokeNarrator().catch((err: any) => {
+      console.error('[GeminiVoice] Narrator invocation failed or timed out:', err);
+      // Fallback response if narration fails or times out
+      const refls = finalTrace.reflections.map((r: any) => r.reflection).join(' ');
+      return `[${finalTrace.mascotCharacter}] ${refls} How are you holding up?`;
+    });
 
     // 9. Save Mascot message to Database
     const { data: mascotMessage } = await supabase
@@ -365,7 +498,14 @@ export async function POST(request: NextRequest) {
           emotions: finalTrace.emotions,
           readinessScore: finalTrace.readinessScore,
           readinessThreshold: finalTrace.readinessThreshold,
-          reflections: finalTrace.reflections
+          reflections: finalTrace.reflections,
+          storyState: finalTrace.storyState,
+          storyProgress: finalTrace.storyProgress,
+          storyInsight: finalTrace.storyInsight,
+          memoryState: finalTrace.memoryState,
+          cognitiveDecision: finalTrace.cognitiveDecision,
+          personalityDecision: finalTrace.personalityDecision,
+          responsePlan: finalTrace.responsePlan
         }
       })
       .select()
@@ -376,6 +516,7 @@ export async function POST(request: NextRequest) {
     chatMetadata.possiblePaths = finalTrace.generatedPaths;
     chatMetadata.lastMascot = finalTrace.mascotCharacter;
     chatMetadata.branches = branches;
+    chatMetadata.consecutiveReflectionCount = context.consecutiveReflectionCount || 0;
 
     await supabase
       .from('chats')
@@ -406,10 +547,80 @@ export async function POST(request: NextRequest) {
       readinessScore: finalTrace.readinessScore,
       readinessThreshold: finalTrace.readinessThreshold,
       reflections: finalTrace.reflections,
-      possiblePaths: finalTrace.generatedPaths
+      possiblePaths: finalTrace.generatedPaths,
+      storyState: finalTrace.storyState,
+      storyProgress: finalTrace.storyProgress,
+      storyInsight: finalTrace.storyInsight,
+      memoryState: finalTrace.memoryState,
+      cognitiveDecision: finalTrace.cognitiveDecision,
+      personalityDecision: finalTrace.personalityDecision,
+      responsePlan: finalTrace.responsePlan
     });
   } catch (error: any) {
-    console.error('POST /api/chat failed with error:', error);
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 });
+    console.error('[POST /api/chat] Critical error in chat lifecycle:', error);
+
+    // Graceful recovery instead of hanging or returning 500
+    try {
+      const fallbackCharacter = 'munch';
+      const fallbackText = "I'm here, but I'm having a little trouble connecting right now. Let's take a deep breath. What else is on your mind?";
+
+      if (supabase && activeChat?.id) {
+        const { data: mascotMessage } = await supabase
+          .from('chat_messages')
+          .insert({
+            chat_id: activeChat.id,
+            sender: 'mascot',
+            content: fallbackText,
+            mascot_character: fallbackCharacter,
+            mascot_expression: 'idle',
+            nlu_metadata: {
+              error: error.message || String(error),
+              is_fallback: true
+            }
+          })
+          .select()
+          .single();
+
+        if (mascotMessage) {
+          return NextResponse.json({
+            message: mascotMessage,
+            userMessage: userMessage || null,
+            state: activeChat.state || 'Exploring',
+            mascotCharacter: fallbackCharacter,
+            mascotExpression: 'idle',
+            readinessScore: 0.0,
+            readinessThreshold: 0.65,
+            reflections: [],
+            possiblePaths: chatMetadata?.possiblePaths || []
+          });
+        }
+      }
+    } catch (innerError) {
+      console.error('[POST /api/chat] Failed to write fallback message:', innerError);
+    }
+
+    // Ultimate fallback if even database recovery fails (e.g. DB is down)
+    const mockMascotMessage = {
+      id: 'mock-fallback-id',
+      chat_id: activeChat?.id || 'mock-chat-id',
+      sender: 'mascot' as const,
+      content: "I'm here, but I'm having a little trouble connecting right now. Let's take a deep breath. What else is on your mind?",
+      mascot_character: 'munch',
+      mascot_expression: 'idle',
+      nlu_metadata: {},
+      created_at: new Date().toISOString()
+    };
+
+    return NextResponse.json({
+      message: mockMascotMessage,
+      userMessage: userMessage || null,
+      state: 'Exploring',
+      mascotCharacter: 'munch',
+      mascotExpression: 'idle',
+      readinessScore: 0.0,
+      readinessThreshold: 0.65,
+      reflections: [],
+      possiblePaths: []
+    });
   }
 }

@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Munch: Gentle Decision Companion
 
-## Getting Started
+Munch is a local-first, privacy-respecting cognitive assistant that helps users understand their thoughts, feelings, patterns, and progress over time. Instead of relying purely on large language models (LLMs) to formulate reasoning, Munch runs a deterministic, multi-stage cognitive pipeline locally to build a deep structural understanding of the conversation before narration.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Cognitive Pipeline Architecture
+
+```
+                       User Input
+                           │
+                           ▼
+                      NLU Engine
+                           │
+                           ▼
+       ┌───────────────────┴───────────────────┐
+       ▼                                       ▼
+  Emotion Layer                           Story Layer
+  (State → Regulation → Dynamics)         (Engine → Events → Progress → Intelligence)
+       └───────────────────┬───────────────────┘
+                           ▼
+              Memory Consolidation Engine
+                           │
+                           ▼
+                 Cognitive Orchestrator
+                           │
+                           ▼
+                   Personality Engine
+                           │
+                           ▼
+                Response Planning Engine
+                           │
+                           ▼
+                   Reflection Engine
+                           │
+                           ▼
+               Decision Readiness Engine
+                           │
+                           ▼
+               Mascot Specialist Engine
+                           │
+                           ▼
+                    Prompt Builder
+                           │
+                           ▼
+                     LLM Narrator
+                           │
+                           ▼
+                    Mascot Dialogue
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Current Progress Checkpoint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Phase 5
+- [x] **Sprint 1**: Emotional State Engine
+- [x] **Sprint 2**: Emotional Regulation & Dynamics
+- [x] **Sprint 3**: Story Progress Engine
+- [x] **Sprint 4**: Story Intelligence Engine
+- [x] **Sprint 5**: Memory Consolidation Engine
 
-## Learn More
+### Phase 6
+- [x] **Sprint 1**: Cognitive Orchestrator (Thinking Brain)
+- [x] **Sprint 2**: Personality Engine (Identity & Expressive traits)
+- [x] **Sprint 2 Refinements**: Expression Intensity & Response Constraints mapping
+- [x] **Sprint 3**: Speculative Cognition Engine (Typing draft parallelization in RAM)
+- [x] **Sprint 4**: Response Planning Engine (Pre-LLM structured blueprinting)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Next Milestone
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Phase 6 Sprint 5 — Context Assembly Engine
+This upcoming milestone will build a context packaging engine that gathers NLU observations, emotional history, story continuity, consolidated long-term memories, and the planning blueprint to prepare the final LLM prompt.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Development
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Setup
+Ensure node packages are installed:
+```bash
+npm install
+```
+
+### Run Tests
+To run all 158 vitest unit and integration tests:
+```bash
+npx vitest run
+```
+
+### Production Build
+To verify Next.js build:
+```bash
+npm run build
+```
