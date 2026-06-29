@@ -16,15 +16,29 @@ import {
   MemoryConsolidationEngine,
   CognitiveOrchestratorEngine,
   PersonalityEngine,
-  ResponsePlanningEngine
+  ResponsePlanningEngine,
+  ContextAssemblyEngine,
+  PromptBuilderEngine
 } from '@/lib/reflection/engine';
 import { DecisionReadinessEngine } from '@/lib/reflection/readiness';
-import { CognitiveTrace, ContextPackage } from '@/lib/reflection/types';
+import { CognitiveTrace, ContextPackage, PromptPackage } from '@/lib/reflection/types';
 import { SPECULATIVE_CACHE, PIPELINE_VERSION, resolveInvalidatedEngines } from '@/lib/reflection/speculative';
 import { analyzeTopics } from '@/lib/context/builder';
 import { EmotionalStateEngine } from '@/lib/emotion/state';
 import { EmotionRegulationEngine } from '@/lib/emotion/regulation';
 import { EmotionDynamicsEngine } from '@/lib/emotion/dynamics';
+import { LLMGateway } from '@/lib/llm/gateway';
+import { ResponseValidator } from '@/lib/validation/validator';
+import { ResponseExpressionEngine } from '@/lib/expression/engine';
+
+function stripPromptContent(pkg?: PromptPackage) {
+  if (!pkg) return undefined;
+  const { sections, ...rest } = pkg;
+  return {
+    ...rest,
+    sections: (sections || []).map(({ content, ...sRest }) => sRest)
+  };
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -58,54 +72,30 @@ const getGeminiModel = () => {
 async function generateMascotVoice(
   trace: CognitiveTrace,
   context: ContextPackage
-): Promise<string> {
-  const model = getGeminiModel();
-  if (!model) {
-    // Fallback dialogue if Gemini is offline
+): Promise<any> {
+  if (!trace.promptPackage) {
     const refls = trace.reflections.map(r => r.reflection).join(' ');
-    return `[${trace.mascotCharacter}] ${refls} What else is on your mind?`;
+    return {
+      text: `[${trace.mascotCharacter}] ${refls} What else is on your mind?`,
+      metrics: {
+        providerId: 'fallback',
+        modelId: 'fallback',
+        finishReason: 'stop',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        latency: 0,
+        retries: 0,
+        timeoutMs: 0,
+        gatewayVersion: 'v1.0.0'
+      }
+    };
   }
 
-  const nickname = context.user_nickname || 'friend';
-  const prompt = `
-You are the voice (narrator) for Munch's mascot specialist: '${trace.mascotCharacter}'.
-Munch is a gentle decision companion for ${nickname}.
-
-SPECIALIST PERSONALITY:
-- 'pandy': Comfort & Rest (cozy warmth, gentle, panda mascot)
-- 'ollie': Reflection & Perspective (thoughtful, patient owl mascot)
-- 'dobby': Encouragement & Confidence (motivating, active dog mascot)
-- 'ellie': Emotional Safety & Reassurance (comforting, calming elephant mascot)
-- 'chicky': Optimism & Celebration (happy, joyful chick mascot)
-- 'munch': Balanced Guidance (default clover guide)
-
-STATE CONTEXT:
-- Conversation State Machine Stage: "${trace.state}"
-- User Input: "${context.user_input}"
-- Active Topic: "${trace.activeTopicKey}"
-
-DETERMINISTIC COGNITIVE OBSERVATIONS (REFLECTION ENGINE OUTPUT):
-These are the ground truths computed by our reasoning layer. You MUST voice these reflections:
-${trace.reflections.map((r, i) => `${i + 1}. [Observation: ${r.observation}] Reflection: "${r.reflection}" (Confidence: ${r.confidence})`).join('\n')}
-
-INSTRUCTIONS:
-1. Speak strictly using the specialist's voice and personality.
-2. Your ONLY job is to express the deterministic reflections above naturally, with flow, warmth, and ease.
-3. NEVER make up independent diagnoses, never exaggerate the relationship, and never invent facts.
-4. Keep the response concise: target 1 to 3 sentences (40-80 words).
-5. Never mention terms like "AI", "algorithm", "readiness score", "threshold", "reflection engine", or "NLU". Focus entirely on natural, warm human connection.
-
-Mascot response:
-`;
-
-  try {
-    const response = await model.generateContent(prompt);
-    return response.response.text().trim();
-  } catch (err) {
-    console.error('[GeminiVoice] Failed to generate mascot voice response:', err);
-    const refls = trace.reflections.map(r => r.reflection).join(' ');
-    return `[${trace.mascotCharacter}] ${refls} How are you holding up?`;
-  }
+  const gateway = new LLMGateway();
+  return gateway.generate({
+    promptPackage: trace.promptPackage
+  });
 }
 
 /**
@@ -443,8 +433,10 @@ export async function POST(request: NextRequest) {
       new PersonalityEngine(),
       new ResponsePlanningEngine(),
       new ReflectionEngine(),
+      new ContextAssemblyEngine(),
+      new DecisionReadinessEngine(),
       new MascotSpecialistEngine(),
-      new DecisionReadinessEngine()
+      new PromptBuilderEngine()
     ];
 
     let activePipeline = pipeline;
@@ -467,23 +459,86 @@ export async function POST(request: NextRequest) {
 
     finalTrace = await runCognitivePipeline(activePipeline, traceToUse, context);
 
-    // 8. Call Gemini Voice Narrator with timeout and invocation guard
-    let narratorInvoked = false;
-    const invokeNarrator = async () => {
-      if (narratorInvoked) {
-        throw new Error('[NarratorGuard] Narrator was already invoked in this request cycle!');
+    // 8. Call LLM Gateway & Validate Response in a Retry Loop
+    const validator = new ResponseValidator();
+    let gatewayResponse: any;
+    let validationResult: any;
+    let retryAttempt = 0;
+    const maxRetries = 2;
+
+    while (retryAttempt <= maxRetries) {
+      if (retryAttempt > 0) {
+        console.log(`[POST /api/chat] Validation failed. Re-running Prompt Builder Engine (attempt=${retryAttempt})...`);
+        const builder = new PromptBuilderEngine();
+        finalTrace = await builder.execute(finalTrace, context);
       }
-      narratorInvoked = true;
+
       const voicePromise = generateMascotVoice(finalTrace, context);
-      return withTimeout(voicePromise, 5000, 'Narrator voice generation timed out after 5000ms');
+      gatewayResponse = await withTimeout(voicePromise, 6000, 'Narrator voice generation timed out').catch((err: any) => {
+        console.error('[LLMGateway] Gateway invocation failed or timed out:', err);
+        const refls = finalTrace.reflections.map((r: any) => r.reflection).join(' ');
+        return {
+          text: `[${finalTrace.mascotCharacter}] ${refls} How are you holding up?`,
+          metrics: {
+            providerId: 'fallback',
+            modelId: 'fallback',
+            finishReason: 'error',
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            latency: 0,
+            retries: 0,
+            timeoutMs: 5000,
+            gatewayVersion: 'v1.0.0'
+          }
+        };
+      });
+
+      const validatorInput = {
+        gatewayResponse,
+        promptPackage: finalTrace.promptPackage!,
+        responsePlan: finalTrace.responsePlan,
+        personalityDecision: finalTrace.personalityDecision,
+        mascotDecision: finalTrace.mascotDecision,
+        contextAssembly: finalTrace.contextAssembly
+      };
+
+      validationResult = validator.validate(validatorInput, retryAttempt);
+
+      if (validationResult.passed) {
+        break;
+      }
+
+      if (validationResult.validationScore < 80 && retryAttempt < maxRetries) {
+        retryAttempt++;
+        finalTrace.retryHints = validator.compileRetryHints(validationResult.issues);
+      } else {
+        break;
+      }
+    }
+
+    // Run ResponseExpressionEngine (the final presentation layer before delivery)
+    const expressionEngine = new ResponseExpressionEngine();
+    const mascot = finalTrace.mascotDecision;
+    const personality = finalTrace.personalityDecision;
+
+    const expressionProfile = {
+      mascotId: mascot?.mascotId || 'munch',
+      dominantTrait: personality?.dominantTrait || 'calm',
+      communicationStyle: personality?.communicationStyle || 'balanced',
+      energyLevel: personality?.energyLevel || 'medium',
+      expressionIntensity: personality?.expressionIntensity || 'medium',
+      humorAllowed: personality?.humorAllowed ?? false,
+      useMetaphors: personality?.useMetaphors ?? false
     };
 
-    const voiceMessageText = await invokeNarrator().catch((err: any) => {
-      console.error('[GeminiVoice] Narrator invocation failed or timed out:', err);
-      // Fallback response if narration fails or times out
-      const refls = finalTrace.reflections.map((r: any) => r.reflection).join(' ');
-      return `[${finalTrace.mascotCharacter}] ${refls} How are you holding up?`;
+    const expressionResult = expressionEngine.execute({
+      validatedResponse: gatewayResponse.text,
+      profile: expressionProfile,
+      responsePlan: finalTrace.responsePlan
     });
+
+    const voiceMessageText = expressionResult.finalText;
 
     // 9. Save Mascot message to Database
     const { data: mascotMessage } = await supabase
@@ -505,7 +560,26 @@ export async function POST(request: NextRequest) {
           memoryState: finalTrace.memoryState,
           cognitiveDecision: finalTrace.cognitiveDecision,
           personalityDecision: finalTrace.personalityDecision,
-          responsePlan: finalTrace.responsePlan
+          responsePlan: finalTrace.responsePlan,
+          contextAssembly: finalTrace.contextAssembly,
+          promptPackage: stripPromptContent(finalTrace.promptPackage),
+          llmMetrics: gatewayResponse.metrics,
+          validation: {
+            passed: validationResult.passed,
+            validationScore: validationResult.validationScore,
+            highestSeverity: validationResult.highestSeverity,
+            retryCount: validationResult.metrics.retryCount,
+            durationMs: validationResult.metrics.durationMs,
+            validatorVersion: validationResult.metrics.validatorVersion,
+            rulesVersion: validationResult.metrics.rulesVersion,
+            responseHash: validationResult.metrics.responseHash,
+            issues: (!validationResult.passed || process.env.NODE_ENV === 'development') ? validationResult.issues : undefined
+          },
+          expression: {
+            expressionVersion: expressionResult.metrics.expressionVersion,
+            transformationsApplied: expressionResult.metrics.transformationsApplied,
+            warnings: expressionResult.metrics.warnings
+          }
         }
       })
       .select()
@@ -544,6 +618,7 @@ export async function POST(request: NextRequest) {
       state: finalTrace.state,
       mascotCharacter: finalTrace.mascotCharacter,
       mascotExpression: finalTrace.mascotExpression,
+      activeTopicKey: finalTrace.activeTopicKey,
       readinessScore: finalTrace.readinessScore,
       readinessThreshold: finalTrace.readinessThreshold,
       reflections: finalTrace.reflections,
@@ -554,7 +629,26 @@ export async function POST(request: NextRequest) {
       memoryState: finalTrace.memoryState,
       cognitiveDecision: finalTrace.cognitiveDecision,
       personalityDecision: finalTrace.personalityDecision,
-      responsePlan: finalTrace.responsePlan
+      responsePlan: finalTrace.responsePlan,
+      contextAssembly: finalTrace.contextAssembly,
+      promptPackage: stripPromptContent(finalTrace.promptPackage),
+      llmMetrics: gatewayResponse.metrics,
+      validation: {
+        passed: validationResult.passed,
+        validationScore: validationResult.validationScore,
+        highestSeverity: validationResult.highestSeverity,
+        retryCount: validationResult.metrics.retryCount,
+        durationMs: validationResult.metrics.durationMs,
+        validatorVersion: validationResult.metrics.validatorVersion,
+        rulesVersion: validationResult.metrics.rulesVersion,
+        responseHash: validationResult.metrics.responseHash,
+        issues: (!validationResult.passed || process.env.NODE_ENV === 'development') ? validationResult.issues : undefined
+      },
+      expression: {
+        expressionVersion: expressionResult.metrics.expressionVersion,
+        transformationsApplied: expressionResult.metrics.transformationsApplied,
+        warnings: expressionResult.metrics.warnings
+      }
     });
   } catch (error: any) {
     console.error('[POST /api/chat] Critical error in chat lifecycle:', error);

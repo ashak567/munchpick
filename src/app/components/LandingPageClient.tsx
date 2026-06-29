@@ -24,7 +24,7 @@ export default function LandingPageClient() {
     setCharacter(randMascot)
 
     // Set matching expressions
-    const expressions: MascotExpression[] = ['idle', 'happy', 'think', 'wry']
+    const expressions: MascotExpression[] = ['idle', 'happy', 'thinking', 'wry']
     setExpression(expressions[Math.floor(Math.random() * expressions.length)])
 
     // 2. Select visual scene based on current local time

@@ -197,7 +197,7 @@ export async function selectMascotPersonality(
   if (isHappy && (character === 'chicky' || character === 'dobby')) {
     expression = 'happy'
   } else if (isReflective && character === 'ollie') {
-    expression = 'think'
+    expression = 'thinking'
   } else if (isAnxiousOrTired && character === 'pandy') {
     expression = 'wry'
   }

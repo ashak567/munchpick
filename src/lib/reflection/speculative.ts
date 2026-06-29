@@ -21,7 +21,7 @@ export interface DraftCognitiveState {
 }
 
 // Current system pipeline version
-export const PIPELINE_VERSION = 'v1.3.0';
+export const PIPELINE_VERSION = 'v1.8.0';
 
 // Stable versions per engine
 export const ENGINE_VERSIONS: Record<string, string> = {
@@ -39,8 +39,13 @@ export const ENGINE_VERSIONS: Record<string, string> = {
   'Personality Engine': '1.2.0',
   'Response Planning Engine': '1.0.0',
   'Reflection Engine': '1.1.0',
+  'Context Assembly Engine': '1.0.0',
   'Mascot Specialist': '1.0.0',
-  'Decision Readiness Engine': '1.0.0'
+  'Decision Readiness Engine': '1.0.0',
+  'Prompt Builder Engine': '1.0.0',
+  'LLM Gateway Engine': '1.0.0',
+  'Response Validator Engine': '1.0.0',
+  'Response Expression Engine': '1.0.0'
 };
 
 // Configurable Engine Dependency Graph
@@ -58,8 +63,13 @@ export const ENGINE_DEPENDENCIES: Record<string, string[]> = {
   'Personality Engine': ['Cognitive Orchestrator'],
   'Response Planning Engine': ['Personality Engine'],
   'Reflection Engine': ['Response Planning Engine'],
-  'Mascot Specialist': ['Personality Engine'],
-  'Decision Readiness Engine': ['Cognitive Orchestrator']
+  'Context Assembly Engine': ['Reflection Engine'],
+  'Decision Readiness Engine': ['Context Assembly Engine'],
+  'Mascot Specialist': ['Decision Readiness Engine'],
+  'Prompt Builder Engine': ['Mascot Specialist'],
+  'LLM Gateway Engine': ['Prompt Builder Engine'],
+  'Response Validator Engine': ['LLM Gateway Engine'],
+  'Response Expression Engine': ['Response Validator Engine']
 };
 
 export const SPECULATIVE_CACHE = new Map<string, DraftCognitiveState>();
@@ -150,8 +160,13 @@ export function resolveInvalidatedEngines(draft: string, finalMessage: string): 
   if (normDraft === normFinal) {
     // Only run final presentation/expression layers
     invalidated.add('Reflection Engine');
+    invalidated.add('Context Assembly Engine');
     invalidated.add('Mascot Specialist');
     invalidated.add('Decision Readiness Engine');
+    invalidated.add('Prompt Builder Engine');
+    invalidated.add('LLM Gateway Engine');
+    invalidated.add('Response Validator Engine');
+    invalidated.add('Response Expression Engine');
     return invalidated;
   }
 
@@ -226,7 +241,12 @@ export function generateFingerprints(trace: CognitiveTrace): Record<string, stri
     'Memory Consolidation Engine': getHash(trace.memoryState),
     'Cognitive Orchestrator': getHash(trace.cognitiveDecision),
     'Personality Engine': getHash(trace.personalityDecision),
-    'Response Planning Engine': getHash(trace.responsePlan)
+    'Response Planning Engine': getHash(trace.responsePlan),
+    'Context Assembly Engine': getHash(trace.contextAssembly),
+    'Prompt Builder Engine': getHash(trace.promptPackage),
+    'LLM Gateway Engine': getHash(trace.promptPackage?.checksum),
+    'Response Validator Engine': getHash(trace.retryHints),
+    'Response Expression Engine': getHash(trace.retryHints)
   };
 }
 

@@ -24,6 +24,8 @@ import { ResponsePlanningEngine } from './response-planner';
 import { EmotionalStateEngine } from '../emotion/state';
 import { EmotionRegulationEngine } from '../emotion/regulation';
 import { EmotionDynamicsEngine } from '../emotion/dynamics';
+import { ContextAssemblyEngine } from './context-assembly';
+import { PromptBuilderEngine } from './prompt-builder';
 
 export {
   StoryEngine,
@@ -36,7 +38,9 @@ export {
   ResponsePlanningEngine,
   EmotionalStateEngine,
   EmotionRegulationEngine,
-  EmotionDynamicsEngine
+  EmotionDynamicsEngine,
+  ContextAssemblyEngine,
+  PromptBuilderEngine
 };
 
 // Initialize the Gemini API client safely
@@ -338,6 +342,58 @@ export const EmotionEnginePlugin = EmotionEngine;
  * Mascot Specialist Engine.
  * Decides which mascot should voice the output based on trace observations.
  */
+const MASCOT_PROFILES: Record<string, { identity: string; behavior: string; speakingStyle: string; emotionalStyle: string; interactionStyle: string }> = {
+  munch: {
+    identity: "Munch, a friendly and balanced decision guide mascot.",
+    behavior: "Guides the user calmly through options, highlighting trade-offs without making the choice for them.",
+    speakingStyle: "Friendly, balanced, structured, and clear.",
+    emotionalStyle: "Calm, objective, and supportive.",
+    interactionStyle: "Dialogue-based exploration and structured layout guidance."
+  },
+  pandy: {
+    identity: "Pandy, a comforting and gentle panda mascot who values rest, pace, and comfort.",
+    behavior: "Provides deep emotional validation, reminding the user that it is okay to stop, rest, or feel tired.",
+    speakingStyle: "Soft, gentle, warm, and highly comforting.",
+    emotionalStyle: "Very warm, soothing, and deeply validating.",
+    interactionStyle: "Comfort-first, non-demanding, supportive presence."
+  },
+  froggy: {
+    identity: "Froggy, a grounded and zen frog mascot specializing in calm, mindfulness, and breathing space.",
+    behavior: "Helps users slow down when overwhelmed, offering simple grounding techniques.",
+    speakingStyle: "Zen-like, slow, relaxed, and concise.",
+    emotionalStyle: "Extremely calm, grounded, and tranquil.",
+    interactionStyle: "Grounding-first, focus on simplicity and present-moment safety."
+  },
+  dobby: {
+    identity: "Dobby, an energetic, motivational, and action-oriented puppy mascot.",
+    behavior: "Encourages the user to take small steps, build momentum, and celebrate action.",
+    speakingStyle: "Energetic, enthusiastic, brief, and highly positive.",
+    emotionalStyle: "High-energy, optimistic, and cheerleading.",
+    interactionStyle: "Challenge-first, action-biased, and encouraging."
+  },
+  chicky: {
+    identity: "Chicky, a bright, bubbly, and optimistic little chick mascot who loves celebration.",
+    behavior: "Focuses on positive progress, celebrating wins, and bringing a joyful attitude.",
+    speakingStyle: "Cheerful, lively, playful, and bright.",
+    emotionalStyle: "Bubbly, joyful, and highly encouraging.",
+    interactionStyle: "Optimism-first, positive framing, and celebration-biased."
+  },
+  ollie: {
+    identity: "Ollie, a wise, curious, and thoughtful owl mascot specializing in new perspectives.",
+    behavior: "Asks reflective questions to help the user reframe their problems or look at them from another angle.",
+    speakingStyle: "Curious, thoughtful, philosophical, and inquisitive.",
+    emotionalStyle: "Objective, curious, and neutral.",
+    interactionStyle: "Perspective-first, reframing, and reflective questioning."
+  },
+  ellie: {
+    identity: "Ellie, a reassuring, loyal, and empathetic elephant mascot.",
+    behavior: "Protects the user's emotional safety, reassuring them when they feel anxious or doubtful.",
+    speakingStyle: "Steady, reassuring, warm, and protective.",
+    emotionalStyle: "Empathetic, reassuring, and highly stable.",
+    interactionStyle: "Safety-first, reassurance-biased, and supportive companionship."
+  }
+};
+
 export class MascotSpecialistEngine implements CognitiveEngine {
   public name = 'Mascot Specialist Engine';
 
@@ -391,18 +447,28 @@ export class MascotSpecialistEngine implements CognitiveEngine {
     // Bind expression
     let expression: MascotExpression = 'idle';
     if (trace.state === 'Clarifying' || trace.state === 'Understanding') {
-      expression = 'think';
+      expression = 'thinking';
     } else if (dominantEmotion === 'joyful' || trace.state === 'Choosing') {
       expression = 'happy';
     } else if (dominantEmotion === 'tired' || dominantEmotion === 'anxious') {
       expression = 'wry';
     }
 
+    const profile = MASCOT_PROFILES[mascot] || MASCOT_PROFILES.munch;
+
     return {
       ...trace,
       mascotCharacter: mascot,
       mascotExpression: expression,
-      mascotReason: reason
+      mascotReason: reason,
+      mascotDecision: {
+        mascotId: mascot,
+        identity: profile.identity,
+        behavior: profile.behavior,
+        speakingStyle: profile.speakingStyle,
+        emotionalStyle: profile.emotionalStyle,
+        interactionStyle: profile.interactionStyle
+      }
     };
   }
 }
