@@ -61,7 +61,7 @@ Output must follow this JSON schema:
 
   try {
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.1-flash',
       generationConfig: {
         responseMimeType: 'application/json'
       }
@@ -180,7 +180,7 @@ You MUST return a JSON response with the following keys:
 
   try {
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.1-flash',
       generationConfig: {
         responseMimeType: 'application/json'
       }
@@ -308,7 +308,7 @@ You MUST return a JSON response with the following keys:
       throw new Error('No API Key');
     }
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.1-flash',
       generationConfig: { responseMimeType: 'application/json' }
     });
 

@@ -221,6 +221,21 @@ export class PromptBuilderEngine implements CognitiveEngine {
       }
     }
 
+    mustDo.push(
+      "Respond primarily to the user's MOST RECENT message."
+    );
+
+    mustDo.push(
+      "Do not repeat previous assistant responses."
+    );
+
+    avoid.push(
+      "Do not reuse identical opening sentences from previous turns."
+    );
+
+    avoid.push(
+      "Do not ask the same follow-up question unless the user ignored it."
+    );
     const directives: PromptDirective = { mustDo, shouldDo, avoid };
 
     // Calculate tokens

@@ -9,7 +9,7 @@ export class GeminiProviderAdapter implements LLMProvider {
   public validateCapabilities(capabilities: ProviderCapabilities): boolean {
     // Gemini supports streaming and reasoning; vision is optional
     if (capabilities.supportsReasoning) {
-      //gemini-2.5-pro or similar supports reasoning
+      //gemini-3.1-flash or similar supports reasoning
       return true;
     }
     return true;
@@ -30,7 +30,7 @@ export class GeminiProviderAdapter implements LLMProvider {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const useReasoning = request.promptPackage.providerHints?.supportsReasoning;
-    const modelName = useReasoning ? 'gemini-2.5-pro' : 'gemini-3.5-flash';
+    const modelName = 'gemini-3.1-flash';
 
     const model = genAI.getGenerativeModel({
       model: modelName,
@@ -41,6 +41,9 @@ export class GeminiProviderAdapter implements LLMProvider {
     });
 
     const promptText = PromptRenderer.renderToText(request.promptPackage);
+    console.log("========== PROMPT SENT TO GEMINI ==========");
+    console.log(promptText);
+    console.log("===========================================");
     const response = await model.generateContent(promptText);
     const text = response.response.text().trim();
 
@@ -63,7 +66,7 @@ export class GeminiProviderAdapter implements LLMProvider {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.1-flash',
       generationConfig: {
         temperature: request.temperature ?? 0.7,
         maxOutputTokens: request.maxTokens ?? 250

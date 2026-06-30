@@ -28,7 +28,7 @@ The module is housed under `src/lib/nlu/` and is structured as follows:
 *   [`types.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/types.ts): Strongly-typed interfaces for context inputs, history, evolution, and all 12 responsibilities.
 *   [`confidence.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/confidence.ts): Utility functions to normalize confidence scores (between 0.0 and 1.0) and handle evidence.
 *   [`fallback.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/fallback.ts): A local, rule-based keyword and regex parser. It runs as a resilient fallback if Gemini is unconfigured or fails.
-*   [`pipeline.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/pipeline.ts): The core LLM execution pipeline utilizing Gemini 1.5 Flash. It constructs context-aware prompts and validates structured JSON output.
+*   [`pipeline.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/pipeline.ts): The core LLM execution pipeline utilizing Gemini 3.1 Flash. It constructs context-aware prompts and validates structured JSON output.
 *   [`resolver.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/resolver.ts): The post-processing engine applying evidence weighting, hierarchy, safeguards, evolution metrics, and curiosity trigger controls.
 *   [`service.ts`](file:///c:/Users/ASUS/OneDrive/Documents/munchpick/src/lib/nlu/service.ts): The service wrapper (`NLUEngine`) which manages historical database loading, runs the pipeline, calls the resolver, and persists runs asynchronously to Supabase.
 

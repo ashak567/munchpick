@@ -9,7 +9,7 @@ const getGeminiModel = () => {
   if (!apiKey || apiKey === 'MOCK_KEY') return null;
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.1-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 };

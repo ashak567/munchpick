@@ -139,7 +139,7 @@ export async function runCognitivePipeline(
       try {
         // 3. Deep Copy Guard to prevent mutation side-effects
         const traceCopy = JSON.parse(JSON.stringify(currentTrace));
-        
+
         // 4. Timeout Protection per engine
         const executePromise = engine.execute(traceCopy, context);
         const resultTrace = await withTimeout(
@@ -194,7 +194,7 @@ export async function extractPathsFromText(
   }
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.1-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
@@ -260,7 +260,7 @@ export class NluEnginePlugin implements CognitiveEngine {
 
     // 3. Save observations back into the context so downstream engines can access them
     context.observations = context.observations || [];
-    
+
     // Map properties from resolved to AgentObservation format
     const mappings: Array<{ key: keyof typeof resolved; label: string }> = [
       { key: 'state_signals', label: 'state_signals' },
@@ -507,40 +507,40 @@ export class ReflectionEngine implements CognitiveEngine {
         const emotionalState = trace.emotionalState;
         const dominantEmotion = emotionalState ? emotionalState.primaryEmotion : (trace.emotions && trace.emotions.length > 0 ? trace.emotions[0] : null);
 
-      if (dominantEmotion) {
-        let reflectionText = '';
-        let confidence = emotionalState ? emotionalState.confidence : 0.8;
+        if (dominantEmotion) {
+          let reflectionText = '';
+          let confidence = emotionalState ? emotionalState.confidence : 0.8;
 
-        if (dominantEmotion === 'tired' || dominantEmotion === 'exhausted') {
-          reflectionText = "I wonder if your energy is running a bit lower than usual today.";
-        } else if (dominantEmotion === 'overwhelmed' || dominantEmotion === 'busy') {
-          reflectionText = "I notice there's a lot of noise or demands around you right now.";
-        } else if (dominantEmotion === 'anxious' || dominantEmotion === 'worry' || dominantEmotion === 'unsure') {
-          reflectionText = "I wonder if there is a bit of hesitation or uncertainty underneath these choices.";
-        } else if (dominantEmotion === 'joyful' || dominantEmotion === 'happy') {
-          reflectionText = "It sounds like you're carrying a lighthearted or bright energy right now.";
-        } else if (dominantEmotion === 'reflective') {
-          reflectionText = "It seems you are taking some gentle space to ponder what feels right.";
+          if (dominantEmotion === 'tired' || dominantEmotion === 'exhausted') {
+            reflectionText = "I wonder if your energy is running a bit lower than usual today.";
+          } else if (dominantEmotion === 'overwhelmed' || dominantEmotion === 'busy') {
+            reflectionText = "I notice there's a lot of noise or demands around you right now.";
+          } else if (dominantEmotion === 'anxious' || dominantEmotion === 'worry' || dominantEmotion === 'unsure') {
+            reflectionText = "I wonder if there is a bit of hesitation or uncertainty underneath these choices.";
+          } else if (dominantEmotion === 'joyful' || dominantEmotion === 'happy') {
+            reflectionText = "It sounds like you're carrying a lighthearted or bright energy right now.";
+          } else if (dominantEmotion === 'reflective') {
+            reflectionText = "It seems you are taking some gentle space to ponder what feels right.";
+          }
+
+          if (reflectionText) {
+            reflections.push({
+              observation: `Dominant emotion detected as ${dominantEmotion}.`,
+              reflection: reflectionText,
+              confidence,
+              type: 'emotion'
+            });
+          }
         }
 
-        if (reflectionText) {
+        if (emotionalState && emotionalState.emotionalConsistency === 'conflicted') {
           reflections.push({
-            observation: `Dominant emotion detected as ${dominantEmotion}.`,
-            reflection: reflectionText,
-            confidence,
-            type: 'emotion'
+            observation: `Emotional state is conflicted (stability: ${emotionalState.stability.toFixed(2)}).`,
+            reflection: "I notice a bit of a shift or some conflicting feelings in how you are feeling right now.",
+            confidence: emotionalState.confidence,
+            type: 'conflict'
           });
         }
-      }
-
-      if (emotionalState && emotionalState.emotionalConsistency === 'conflicted') {
-        reflections.push({
-          observation: `Emotional state is conflicted (stability: ${emotionalState.stability.toFixed(2)}).`,
-          reflection: "I notice a bit of a shift or some conflicting feelings in how you are feeling right now.",
-          confidence: emotionalState.confidence,
-          type: 'conflict'
-        });
-      }
       }
     }
     // 2. Analyze NLU State Signals (like cognitive fatigue or overload)
@@ -627,7 +627,7 @@ export class ReflectionEngine implements CognitiveEngine {
       const insight = trace.storyInsight;
       let insightReflectionText = '';
       const hasResilience = insight.recurringPatterns.some(p => p.title === 'Recovers quickly from setbacks' && p.active && p.confidence > 0.6);
-      
+
       if (hasResilience) {
         insightReflectionText = "I've noticed you usually keep moving forward even after difficult moments.";
       } else if (insight.recurringFears.length > 0) {
@@ -666,7 +666,7 @@ export class ReflectionEngine implements CognitiveEngine {
       let observation = `Orchestrator dominant need is "${need}".`;
 
       if (need === 'comfort') {
-        decisionReflection = "I hear how heavy this feels. It's okay to feel this way, and I'm right here with you.";
+        decisionReflection = "This seems important to you. Let's understand what's making it feel this way before deciding what to do next.";
       } else if (need === 'celebrate') {
         decisionReflection = "This is a wonderful step forward. Let's take a moment to celebrate how far you've come!";
       } else if (need === 'guide') {
@@ -678,7 +678,7 @@ export class ReflectionEngine implements CognitiveEngine {
       } else if (need === 'ground') {
         decisionReflection = "It is helpful to anchor back to what you've learned from earlier parts of your journey.";
       } else if (need === 'listen') {
-        decisionReflection = "I'm just listening and keeping space for whatever is on your mind.";
+        decisionReflection = "I'm following what you're saying carefully. Tell me a little more about what's happening from your perspective.";
       }
 
       if (decisionReflection) {
@@ -696,7 +696,7 @@ export class ReflectionEngine implements CognitiveEngine {
       const decision = trace.personalityDecision;
       let personalityReflection = "";
       if (decision.dominantTrait === 'empathetic') {
-        personalityReflection = "I hear you, and I'm here to support you through whatever you're going through.";
+        personalityReflection = "I've been following what you've shared, and I want to understand your situation before jumping to advice.";
       } else if (decision.dominantTrait === 'curious') {
         personalityReflection = "I'm really curious to learn more about what you're experiencing right now.";
       } else if (decision.dominantTrait === 'encouraging') {
@@ -732,9 +732,19 @@ export class ReflectionEngine implements CognitiveEngine {
     }
 
     // 6. Defensive Guard: Limit reflections to maximum of 3 (top by confidence)
-    const limitedReflections = reflections.length > 3
-      ? reflections.sort((a, b) => b.confidence - a.confidence).slice(0, 3)
-      : reflections;
+    const uniqueReflections = reflections.filter(
+      (reflection, index, self) =>
+        index === self.findIndex(
+          r => r.reflection.trim() === reflection.reflection.trim()
+        )
+    );
+
+    const limitedReflections =
+      uniqueReflections.length > 3
+        ? uniqueReflections
+          .sort((a, b) => b.confidence - a.confidence)
+          .slice(0, 3)
+        : uniqueReflections;
 
     // Return the updated trace
     return {

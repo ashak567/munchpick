@@ -16,7 +16,7 @@ export const llmConfig: LLMConfig = {
   defaultProvider: 'gemini',
   providers: {
     gemini: {
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.1-flash',
       temperature: 0.7,
       maxTokens: 250,
       timeoutMs: 5000,

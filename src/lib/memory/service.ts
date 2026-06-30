@@ -15,7 +15,7 @@ async function findSimilarMemoryMatch(
   if (existingMemories.length === 0) return null;
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.1-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
@@ -186,7 +186,7 @@ export async function retrieveMemories(userId: string, contextQuery: string, lim
   if (error || !memories || memories.length === 0) return [];
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.1-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
