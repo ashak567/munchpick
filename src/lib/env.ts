@@ -23,6 +23,8 @@ const serverEnvSchema = clientEnvSchema.extend({
   GEMINI_API_KEY: z
     .string()
     .min(1, 'GEMINI_API_KEY must not be empty'),
+  GEMINI_MODEL: z.string().optional(),
+  GEMINI_REASONING_MODEL: z.string().optional(),
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +85,8 @@ function getServerEnv() {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GEMINI_MODEL: process.env.GEMINI_MODEL,
+    GEMINI_REASONING_MODEL: process.env.GEMINI_REASONING_MODEL,
   })
 
   if (!parsed.success) {

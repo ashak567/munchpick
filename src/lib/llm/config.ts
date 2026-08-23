@@ -1,5 +1,8 @@
+import { serverEnv } from '@/lib/env';
+
 export interface ProviderConfig {
   model: string;
+  reasoningModel?: string;
   temperature: number;
   maxTokens: number;
   timeoutMs: number;
@@ -16,7 +19,8 @@ export const llmConfig: LLMConfig = {
   defaultProvider: 'gemini',
   providers: {
     gemini: {
-      model: 'gemini-1.5-flash',
+      model: serverEnv?.GEMINI_MODEL || 'gemini-1.5-flash',
+      reasoningModel: serverEnv?.GEMINI_REASONING_MODEL || 'gemini-1.5-pro',
       temperature: 0.7,
       maxTokens: 250,
       timeoutMs: 5000,

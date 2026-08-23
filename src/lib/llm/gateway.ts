@@ -181,6 +181,12 @@ export class LLMGateway {
       throw new GatewayError('unavailable', `LLMGateway: Missing configuration for provider '${providerId}'.`);
     }
 
+    // Determine target model role based on reasoning capability request
+    const supportsReasoning = pkg.providerHints?.supportsReasoning ?? false;
+    const targetModel = (supportsReasoning && config.reasoningModel)
+      ? config.reasoningModel
+      : config.model;
+
     // 3. Token Budget Validation
     const expectedOutputTokens = request.maxTokens ?? config.maxTokens;
     const totalEstimatedTokens = pkg.estimatedTokens + expectedOutputTokens;
@@ -207,7 +213,8 @@ export class LLMGateway {
         const execPromise = provider.generate({
           promptPackage: pkg,
           temperature: request.temperature ?? config.temperature,
-          maxTokens: expectedOutputTokens
+          maxTokens: expectedOutputTokens,
+          model: targetModel
         });
 
         // Race execution against a timeout promise
@@ -225,7 +232,7 @@ export class LLMGateway {
 
         const metrics: GatewayMetrics = {
           providerId,
-          modelId: config.model,
+          modelId: targetModel,
           finishReason: response.finishReason,
           promptTokens: response.promptTokens,
           completionTokens: response.completionTokens,

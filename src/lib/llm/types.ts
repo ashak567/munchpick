@@ -4,6 +4,7 @@ export interface LLMRequest {
   promptPackage: PromptPackage;
   temperature?: number;
   maxTokens?: number;
+  model?: string;
 }
 
 export interface LLMResponse {

@@ -18,19 +18,11 @@ export class GeminiProviderAdapter implements LLMProvider {
   public async generate(request: LLMRequest): Promise<LLMResponse> {
     const apiKey = serverEnv.GEMINI_API_KEY || '';
     if (!apiKey || apiKey === 'MOCK_KEY') {
-      // Mock response for fallback/no API key environment
-      const text = `[Fallback Pandy] I hear how heavy this feels. It's okay to feel this way, and I'm right here with you. What else is on your mind?`;
-      return {
-        text,
-        finishReason: 'stop',
-        promptTokens: 10,
-        completionTokens: 20
-      };
+      throw new Error('Gemini API key is missing or invalid (auth error).');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const useReasoning = request.promptPackage.providerHints?.supportsReasoning;
-    const modelName = 'gemini-1.5-flash';
+    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? 'gemini-1.5-pro' : 'gemini-1.5-flash');
 
     const model = genAI.getGenerativeModel({
       model: modelName,
@@ -58,15 +50,13 @@ export class GeminiProviderAdapter implements LLMProvider {
   public async *stream(request: LLMRequest): AsyncGenerator<string, void, unknown> {
     const apiKey = serverEnv.GEMINI_API_KEY || '';
     if (!apiKey || apiKey === 'MOCK_KEY') {
-      yield '[Fallback Pandy] I hear how ';
-      yield 'heavy this feels. ';
-      yield 'It\'s okay to feel this way.';
-      return;
+      throw new Error('Gemini API key is missing or invalid (auth error).');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? 'gemini-1.5-pro' : 'gemini-1.5-flash');
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: modelName,
       generationConfig: {
         temperature: request.temperature ?? 0.7,
         maxOutputTokens: request.maxTokens ?? 250

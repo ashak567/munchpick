@@ -74,22 +74,7 @@ async function generateMascotVoice(
   context: ContextPackage
 ): Promise<any> {
   if (!trace.promptPackage) {
-    const refls = trace.reflections.map(r => r.reflection).join(' ');
-    return {
-      text: `${refls} What else is on your mind?`,
-      metrics: {
-        providerId: 'fallback',
-        modelId: 'fallback',
-        finishReason: 'stop',
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        latency: 0,
-        retries: 0,
-        timeoutMs: 0,
-        gatewayVersion: 'v1.0.0'
-      }
-    };
+    throw new Error('Prompt package is missing from trace.');
   }
 
   const gateway = new LLMGateway();
@@ -516,25 +501,7 @@ export async function POST(request: NextRequest) {
       }
 
       const voicePromise = generateMascotVoice(finalTrace, context);
-      gatewayResponse = await withTimeout(voicePromise, 6000, 'Narrator voice generation timed out').catch((err: any) => {
-        console.error('[LLMGateway] Gateway invocation failed or timed out:', err);
-        const refls = finalTrace.reflections.map((r: any) => r.reflection).join(' ');
-        return {
-          text: `${refls} How are you holding up?`,
-          metrics: {
-            providerId: 'fallback',
-            modelId: 'fallback',
-            finishReason: 'error',
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-            latency: 0,
-            retries: 0,
-            timeoutMs: 5000,
-            gatewayVersion: 'v1.0.0'
-          }
-        };
-      });
+      gatewayResponse = await withTimeout(voicePromise, 6000, 'Narrator voice generation timed out');
 
       const validatorInput = {
         gatewayResponse,
@@ -694,69 +661,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[POST /api/chat] Critical error in chat lifecycle:', error);
-
-    // Graceful recovery instead of hanging or returning 500
-    try {
-      const fallbackCharacter = 'munch';
-      const fallbackText = "I'm here, but I'm having a little trouble connecting right now. Let's take a deep breath. What else is on your mind?";
-
-      if (supabase && activeChat?.id) {
-        const { data: mascotMessage } = await supabase
-          .from('chat_messages')
-          .insert({
-            chat_id: activeChat.id,
-            sender: 'mascot',
-            content: fallbackText,
-            mascot_character: fallbackCharacter,
-            mascot_expression: 'idle',
-            nlu_metadata: {
-              error: error.message || String(error),
-              is_fallback: true
-            }
-          })
-          .select()
-          .single();
-
-        if (mascotMessage) {
-          return NextResponse.json({
-            message: mascotMessage,
-            userMessage: userMessage || null,
-            state: activeChat.state || 'Exploring',
-            mascotCharacter: fallbackCharacter,
-            mascotExpression: 'idle',
-            readinessScore: 0.0,
-            readinessThreshold: 0.65,
-            reflections: [],
-            possiblePaths: chatMetadata?.possiblePaths || []
-          });
-        }
-      }
-    } catch (innerError) {
-      console.error('[POST /api/chat] Failed to write fallback message:', innerError);
-    }
-
-    // Ultimate fallback if even database recovery fails (e.g. DB is down)
-    const mockMascotMessage = {
-      id: 'mock-fallback-id',
-      chat_id: activeChat?.id || 'mock-chat-id',
-      sender: 'mascot' as const,
-      content: "I'm here, but I'm having a little trouble connecting right now. Let's take a deep breath. What else is on your mind?",
-      mascot_character: 'munch',
-      mascot_expression: 'idle',
-      nlu_metadata: {},
-      created_at: new Date().toISOString()
-    };
-
-    return NextResponse.json({
-      message: mockMascotMessage,
-      userMessage: userMessage || null,
-      state: 'Exploring',
-      mascotCharacter: 'munch',
-      mascotExpression: 'idle',
-      readinessScore: 0.0,
-      readinessThreshold: 0.65,
-      reflections: [],
-      possiblePaths: []
-    });
+    return NextResponse.json(
+      { error: error.message || 'Critical server error in chat lifecycle.' },
+      { status: 500 }
+    );
   }
 }
