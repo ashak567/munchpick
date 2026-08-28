@@ -296,7 +296,7 @@ describe('CognitiveOrchestratorEngine tests', () => {
     const refEngine = new ReflectionEngine();
     const finalTrace = await refEngine.execute(trace, context);
 
-    const motivationReflection = finalTrace.reflections.find(r => r.reflection.includes("building something meaningful"));
+    const motivationReflection = finalTrace.reflections.find(r => r.reflection.includes("motivational reinforcement"));
     expect(motivationReflection).toBeDefined();
     expect(motivationReflection?.observation).toContain('motivate');
   });

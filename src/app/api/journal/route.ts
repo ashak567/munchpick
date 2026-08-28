@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { serverEnv } from '@/lib/env'
+import { llmConfig } from '@/lib/llm/config'
 
 const getGeminiModel = () => {
   const apiKey = serverEnv.GEMINI_API_KEY || ''
   if (!apiKey || apiKey === 'MOCK_KEY') return null
   const genAI = new GoogleGenerativeAI(apiKey)
   return genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 250

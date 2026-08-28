@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 import { MunchContextBuilder } from '@/lib/context/builder';
 import {
   runCognitivePipeline,
@@ -56,7 +57,7 @@ const getGeminiModel = () => {
   if (!apiKey || apiKey === 'MOCK_KEY') return null;
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 250
@@ -305,7 +306,7 @@ export async function POST(request: NextRequest) {
     branches = chatMetadata.branches || {};
 
     // 2. Interrupt Handling: Detect topic switches
-    const topicAnalysis = await analyzeTopics(content);
+    const topicAnalysis = (await analyzeTopics(content)) || { active_topics: [], intent_hints: [] };
     const topics = topicAnalysis.active_topics || [];
     let targetTopicKey = 'general';
 
@@ -408,7 +409,8 @@ export async function POST(request: NextRequest) {
     const context = await contextBuilder.buildContext({
       user_id: user.id,
       user_input: content.trim(),
-      options: (chatMetadata.possiblePaths || []).map((p: any) => p.text)
+      options: (chatMetadata.possiblePaths || []).map((p: any) => p.text),
+      topic_analysis: topicAnalysis
     });
     context.chatHistory = chatHistory;
     context.consecutiveReflectionCount = chatMetadata.consecutiveReflectionCount || 0;
@@ -609,16 +611,21 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', activeChat.id);
 
-    // 11. Periodic summary execution in background
+    // 11. Periodic summary execution in background via after()
     const messageCount = (recentMessages || []).length;
     if (messageCount >= 20 && messageCount % 20 === 0) {
-      const { data: allMessages } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('chat_id', activeChat.id)
-        .order('created_at', { ascending: true });
-      generateConversationSummary(activeChat.id, user.id, allMessages || [])
-        .catch(err => console.error('[Summarizer] Background summary failed:', err));
+      after(async () => {
+        try {
+          const { data: allMessages } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('chat_id', activeChat.id)
+            .order('created_at', { ascending: true });
+          await generateConversationSummary(activeChat.id, user.id, allMessages || []);
+        } catch (err) {
+          console.error('[Summarizer] Background summary failed:', err);
+        }
+      });
     }
 
     return NextResponse.json({

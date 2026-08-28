@@ -69,7 +69,7 @@ export interface PromptSection {
   type: PromptSectionType;
   priority: number;
   required: boolean;
-  content: string | Record<string, unknown>;
+  content: string | Record<string, unknown> | unknown[] | any;
 }
 
 export interface PromptDirective {
@@ -144,7 +144,9 @@ export interface StructuredReflection {
   observation: string;
   reflection: string;
   confidence: number;
-  type: 'energy' | 'emotion' | 'conflict' | 'path' | 'general';
+  type: 'energy' | 'emotion' | 'conflict' | 'path' | 'general' | 'emotional_observation';
+  insight?: string;
+  guidance?: string;
 }
 
 export interface CognitiveTrace {

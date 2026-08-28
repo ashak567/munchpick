@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@/utils/supabase/server';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 import { UserMemory, EvidenceReference, MemoryType } from './types';
 
 const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY);
@@ -15,7 +16,7 @@ async function findSimilarMemoryMatch(
   if (existingMemories.length === 0) return null;
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
@@ -186,7 +187,7 @@ export async function retrieveMemories(userId: string, contextQuery: string, lim
   if (error || !memories || memories.length === 0) return [];
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 

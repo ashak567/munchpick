@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 import { selectNickname } from '@/lib/nickname/service';
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer';
 import { analyzeAndDistillMemories } from '@/lib/memory/distiller';
@@ -12,7 +13,7 @@ const getGeminiModel = () => {
   if (!apiKey || apiKey === 'MOCK_KEY') return null;
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.7
@@ -206,11 +207,14 @@ Output MUST follow this JSON schema:
       mascot: activeMascot
     };
 
-    analyzeAndLogObservations(user.id, 'decision', decisionRecord.id, analysisPayload)
-      .catch(err => console.error('HUPS observation logging failed:', err));
-
-    analyzeAndDistillMemories(user.id, 'decision', decisionRecord.id, analysisPayload)
-      .catch(err => console.error('Memory distillation failed:', err));
+    after(async () => {
+      await Promise.allSettled([
+        analyzeAndLogObservations(user.id, 'decision', decisionRecord.id, analysisPayload)
+          .catch(err => console.error('HUPS observation logging failed:', err)),
+        analyzeAndDistillMemories(user.id, 'decision', decisionRecord.id, analysisPayload)
+          .catch(err => console.error('Memory distillation failed:', err))
+      ]);
+    });
 
     // Queue summary candidates for Memory Promotion Pipeline
     await supabase.from('memory_candidates').insert({

@@ -260,7 +260,7 @@ describe('PersonalityEngine tests', () => {
     const refEngine = new ReflectionEngine();
     const finalTrace = await refEngine.execute(trace, context);
 
-    const calmReflection = finalTrace.reflections.find(r => r.reflection.includes("take a deep breath"));
+    const calmReflection = finalTrace.reflections.find(r => r.reflection.includes("calm, steady"));
     expect(calmReflection).toBeDefined();
     expect(calmReflection?.observation).toContain('calm');
 

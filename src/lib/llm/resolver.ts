@@ -1,5 +1,6 @@
 import { LLMProvider, ProviderCapabilities, GatewayHealth } from './types';
 import { GeminiProviderAdapter } from './providers/gemini';
+import { AnthropicProviderAdapter } from './providers/anthropic';
 import { llmConfig } from './config';
 
 export class ProviderResolver {
@@ -8,52 +9,30 @@ export class ProviderResolver {
   constructor() {
     // Register available provider adapters
     this.registerProvider(new GeminiProviderAdapter());
-    // (Future adapters like GPT, Claude, and DeepSeek can register here)
+    this.registerProvider(new AnthropicProviderAdapter());
   }
 
   public registerProvider(provider: LLMProvider): void {
     this.providers.set(provider.id, provider);
+    if (provider.id === 'anthropic') {
+      this.providers.set('claude', provider);
+    }
   }
 
   /**
-   * Resolves the optimal provider.
-   * If a targetProviderId is specified, attempts to use it.
-   * If not, fallback to the default provider from configuration.
-   * Checks health registry to avoid degraded/unhealthy providers.
+   * Resolves the provider explicitly or by default configuration.
+   * Fails fast if requested provider is unknown or lacks required capabilities.
    */
   public resolve(
     capabilities: ProviderCapabilities,
-    healthRegistry: Map<string, GatewayHealth>,
+    _healthRegistry: Map<string, GatewayHealth>,
     targetProviderId?: string
   ): LLMProvider {
     const selectedId = targetProviderId || llmConfig.defaultProvider;
-    
-    // Attempt resolving target
-    let provider = this.providers.get(selectedId);
-    let health = healthRegistry.get(selectedId);
-
-    // If no target provider is explicitly requested, or if target is unhealthy/missing, try fallback
-    if (!targetProviderId) {
-      if (!provider || (health && health.status === 'unhealthy')) {
-        for (const [id, prov] of this.providers.entries()) {
-          const provHealth = healthRegistry.get(id);
-          if (!provHealth || provHealth.status === 'healthy') {
-            if (prov.validateCapabilities(capabilities)) {
-              provider = prov;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Default fallback to first registered provider if everything is degraded
-    if (!provider) {
-      provider = this.providers.get('gemini') || this.providers.values().next().value;
-    }
+    const provider = this.providers.get(selectedId);
 
     if (!provider) {
-      throw new Error('LLM Provider Resolver: No active provider found.');
+      throw new Error(`LLM Provider Resolver: Provider '${selectedId}' is not registered.`);
     }
 
     // Check capabilities

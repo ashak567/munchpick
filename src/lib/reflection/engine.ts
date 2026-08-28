@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 import {
   CognitiveEngine,
   CognitiveTrace,
@@ -194,7 +195,7 @@ export async function extractPathsFromText(
   }
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
@@ -508,25 +509,33 @@ export class ReflectionEngine implements CognitiveEngine {
         const dominantEmotion = emotionalState ? emotionalState.primaryEmotion : (trace.emotions && trace.emotions.length > 0 ? trace.emotions[0] : null);
 
         if (dominantEmotion) {
-          let reflectionText = '';
+          let insight = '';
+          let guidance = '';
           let confidence = emotionalState ? emotionalState.confidence : 0.8;
 
           if (dominantEmotion === 'tired' || dominantEmotion === 'exhausted') {
-            reflectionText = "I wonder if your energy is running a bit lower than usual today.";
+            insight = "User physical or cognitive energy appears depleted.";
+            guidance = "Acknowledge fatigue gently without demanding high-energy engagement.";
           } else if (dominantEmotion === 'overwhelmed' || dominantEmotion === 'busy') {
-            reflectionText = "I notice there's a lot of noise or demands around you right now.";
+            insight = "User is experiencing high cognitive load from competing demands.";
+            guidance = "Provide calming presence and avoid introducing additional complexity.";
           } else if (dominantEmotion === 'anxious' || dominantEmotion === 'worry' || dominantEmotion === 'unsure') {
-            reflectionText = "I wonder if there is a bit of hesitation or uncertainty underneath these choices.";
+            insight = "User shows hesitation or uncertainty regarding current choices.";
+            guidance = "Validate emotional uncertainty before moving forward.";
           } else if (dominantEmotion === 'joyful' || dominantEmotion === 'happy') {
-            reflectionText = "It sounds like you're carrying a lighthearted or bright energy right now.";
+            insight = "User is carrying bright, positive emotional momentum.";
+            guidance = "Share in the user's positive state warmly.";
           } else if (dominantEmotion === 'reflective') {
-            reflectionText = "It seems you are taking some gentle space to ponder what feels right.";
+            insight = "User is taking contemplative space to evaluate choices thoughtfully.";
+            guidance = "Honor the reflective pause and support self-discovery.";
           }
 
-          if (reflectionText) {
+          if (insight) {
             reflections.push({
               observation: `Dominant emotion detected as ${dominantEmotion}.`,
-              reflection: reflectionText,
+              insight,
+              guidance,
+              reflection: `${insight} ${guidance}`.trim(),
               confidence,
               type: 'emotion'
             });
@@ -534,9 +543,13 @@ export class ReflectionEngine implements CognitiveEngine {
         }
 
         if (emotionalState && emotionalState.emotionalConsistency === 'conflicted') {
+          const insight = "User shows mixed or conflicting emotional signals across recent turns.";
+          const guidance = "Acknowledge the emotional tension without forcing quick resolution.";
           reflections.push({
             observation: `Emotional state is conflicted (stability: ${emotionalState.stability.toFixed(2)}).`,
-            reflection: "I notice a bit of a shift or some conflicting feelings in how you are feeling right now.",
+            insight,
+            guidance,
+            reflection: `${insight} ${guidance}`.trim(),
             confidence: emotionalState.confidence,
             type: 'conflict'
           });
@@ -549,9 +562,13 @@ export class ReflectionEngine implements CognitiveEngine {
       if (nluStateObs.length > 0 && Array.isArray(nluStateObs[0].value)) {
         const signals = nluStateObs[0].value.map((s: any) => s.signal);
         if (signals.includes('cognitive_fatigue') || signals.includes('mental_overload')) {
+          const insight = "Cognitive fatigue or mental overload detected in interaction signals.";
+          const guidance = "Keep interactions lightweight and reduce decision pressure.";
           reflections.push({
             observation: "NLU detected cognitive fatigue or mental overload.",
-            reflection: "It feels like your mind has been working extra hard recently.",
+            insight,
+            guidance,
+            reflection: `${insight} ${guidance}`.trim(),
             confidence: 0.85,
             type: 'energy'
           });
@@ -565,16 +582,24 @@ export class ReflectionEngine implements CognitiveEngine {
     const hasAmbiguities = nluAmbiguityObs.length > 0 && Array.isArray(nluAmbiguityObs[0].value) && nluAmbiguityObs[0].value.length > 0;
 
     if (hasConflicts) {
+      const insight = "User is navigating conflicting priorities or competing decision pathways.";
+      const guidance = "Help clarify the underlying trade-offs between competing desires.";
       reflections.push({
         observation: "Orchestrator identified conflicting hypotheses in decision pathways.",
-        reflection: "I wonder if you're feeling pulled in two different directions at the same time.",
+        insight,
+        guidance,
+        reflection: `${insight} ${guidance}`.trim(),
         confidence: 0.88,
         type: 'conflict'
       });
     } else if (hasAmbiguities) {
+      const insight = "User's intended path or options are currently ambiguous or evolving.";
+      const guidance = "Invite gentle clarification on what the user hopes to achieve.";
       reflections.push({
         observation: "NLU identified ambiguities in options or intent.",
-        reflection: "It seems like the path forward is still taking shape and isn't fully clear yet.",
+        insight,
+        guidance,
+        reflection: `${insight} ${guidance}`.trim(),
         confidence: 0.78,
         type: 'conflict'
       });
@@ -583,18 +608,21 @@ export class ReflectionEngine implements CognitiveEngine {
     // 4. Analyze Paths and Options
     if (shouldGenerate('reflection') && trace.generatedPaths && trace.generatedPaths.length > 0) {
       const pathTexts = trace.generatedPaths.map(p => p.text);
-      let desc = '';
+      let insight = '';
       if (pathTexts.length === 1) {
-        desc = `I hear you considering the path of "${pathTexts[0]}".`;
+        insight = `User is considering the path: "${pathTexts[0]}".`;
       } else if (pathTexts.length === 2) {
-        desc = `It sounds like you are weighing between "${pathTexts[0]}" and "${pathTexts[1]}".`;
+        insight = `User is weighing options between "${pathTexts[0]}" and "${pathTexts[1]}".`;
       } else {
-        desc = `I notice a few possible directions on your mind, like "${pathTexts[0]}" or "${pathTexts[1]}".`;
+        insight = `User is exploring multiple directions: ${pathTexts.map(p => `"${p}"`).join(', ')}.`;
       }
+      const guidance = "Frame the options clearly to support balanced evaluation.";
 
       reflections.push({
         observation: `Identified ${pathTexts.length} paths under consideration.`,
-        reflection: desc,
+        insight,
+        guidance,
+        reflection: `${insight} ${guidance}`.trim(),
         confidence: 0.92,
         type: 'path'
       });
@@ -603,19 +631,25 @@ export class ReflectionEngine implements CognitiveEngine {
     // 4.5 Analyze Story Progress
     if (shouldGenerate('story_reference') && trace.storyProgress) {
       const progress = trace.storyProgress;
-      let progressReflectionText = '';
+      let insight = '';
+      let guidance = '';
       if (progress.continuityStatus === 'stagnating') {
-        progressReflectionText = "We've been circling around this for a little while.";
+        insight = `Story arc "${progress.linkedArc}" indicates repeated circling or stagnation.`;
+        guidance = "Gently illuminate the pattern and invite a fresh perspective.";
       } else if (progress.continuityStatus === 'pivoting') {
-        progressReflectionText = "This feels like an important turning point compared to where you were earlier.";
+        insight = `User is making an important directional pivot in arc "${progress.linkedArc}".`;
+        guidance = "Recognize the transition and anchor new intentions.";
       } else if (progress.continuityStatus === 'progressing') {
-        progressReflectionText = "It is nice to see your efforts starting to pay off on this journey.";
+        insight = `User is demonstrating steady forward progress in arc "${progress.linkedArc}".`;
+        guidance = "Reinforce constructive momentum and celebrate progress.";
       }
 
-      if (progressReflectionText) {
+      if (insight) {
         reflections.push({
           observation: `Story progress status is ${progress.continuityStatus} for arc "${progress.linkedArc}".`,
-          reflection: progressReflectionText,
+          insight,
+          guidance,
+          reflection: `${insight} ${guidance}`.trim(),
           confidence: progress.confidence,
           type: 'general'
         });
@@ -624,21 +658,26 @@ export class ReflectionEngine implements CognitiveEngine {
 
     // 4.6 Analyze Story Insights
     if (shouldGenerate('story_reference') && trace.storyInsight) {
-      const insight = trace.storyInsight;
-      let insightReflectionText = '';
-      const hasResilience = insight.recurringPatterns.some(p => p.title === 'Recovers quickly from setbacks' && p.active && p.confidence > 0.6);
+      const insightObj = trace.storyInsight;
+      let insight = '';
+      let guidance = '';
+      const hasResilience = insightObj.recurringPatterns.some(p => p.title === 'Recovers quickly from setbacks' && p.active && p.confidence > 0.6);
 
       if (hasResilience) {
-        insightReflectionText = "I've noticed you usually keep moving forward even after difficult moments.";
-      } else if (insight.recurringFears.length > 0) {
-        insightReflectionText = "This challenge feels familiar compared to earlier parts of your journey.";
+        insight = "User has demonstrated a recurring pattern of recovering quickly from setbacks.";
+        guidance = "Highlight past resilience as an enduring internal strength.";
+      } else if (insightObj.recurringFears.length > 0) {
+        insight = "Current challenge echoes recurring fears from past story events.";
+        guidance = "Offer reassuring context that familiar challenges can be navigated.";
       }
 
-      if (insightReflectionText) {
+      if (insight) {
         reflections.push({
-          observation: `Story insight detected patterns/fears.`,
-          reflection: insightReflectionText,
-          confidence: insight.confidence,
+          observation: `Story insight detected patterns or fears.`,
+          insight,
+          guidance,
+          reflection: `${insight} ${guidance}`.trim(),
+          confidence: insightObj.confidence,
           type: 'general'
         });
       }
@@ -650,9 +689,13 @@ export class ReflectionEngine implements CognitiveEngine {
         m => m.category === 'goal' && !m.archived && m.reinforcementCount >= 2
       );
       if (activeGoalMemories.length > 0) {
+        const insight = `User has an established, reinforced commitment to goal "${activeGoalMemories[0].title}".`;
+        const guidance = "Respect the user's ongoing dedication to this long-term objective.";
         reflections.push({
           observation: `Detected reinforced goal memory for arc "${activeGoalMemories[0].title}".`,
-          reflection: "You've stayed committed to this goal for quite some time.",
+          insight,
+          guidance,
+          reflection: `${insight} ${guidance}`.trim(),
           confidence: activeGoalMemories[0].confidence,
           type: 'general'
         });
@@ -662,29 +705,39 @@ export class ReflectionEngine implements CognitiveEngine {
     // 4.8 Incorporate Cognitive Orchestrator Decision
     if (shouldGenerate('guidance') && trace.cognitiveDecision) {
       const need = trace.cognitiveDecision.dominantNeed;
-      let decisionReflection: string | null = null;
+      let insight = '';
+      let guidance = '';
       let observation = `Orchestrator dominant need is "${need}".`;
 
       if (need === 'comfort') {
-        decisionReflection = "This seems important to you. Let's understand what's making it feel this way before deciding what to do next.";
+        insight = "User's primary cognitive need is emotional comfort and validation.";
+        guidance = "Provide compassionate presence and validate feelings before problem-solving.";
       } else if (need === 'celebrate') {
-        decisionReflection = "This is a wonderful step forward. Let's take a moment to celebrate how far you've come!";
+        insight = "User achieved a meaningful milestone worthy of celebration.";
+        guidance = "Express shared joy and highlight positive accomplishments.";
       } else if (need === 'guide') {
-        decisionReflection = "This feels like a turning point where you're shifting your focus toward a new direction.";
+        insight = "User is seeking active guidance and structural direction.";
+        guidance = "Offer structured framing and actionable next steps.";
       } else if (need === 'motivate') {
-        decisionReflection = "Even when progress feels slow, the effort you're putting in is building something meaningful.";
+        insight = "User needs encouragement and motivational reinforcement.";
+        guidance = "Inspire confidence and emphasize the value of sustained effort.";
       } else if (need === 'explore') {
-        decisionReflection = "I'm curious to explore more about what this means for your overall journey.";
+        insight = "User is in an open, exploratory phase considering possibilities.";
+        guidance = "Foster curious exploration and broaden perspective.";
       } else if (need === 'ground') {
-        decisionReflection = "It is helpful to anchor back to what you've learned from earlier parts of your journey.";
+        insight = "User needs grounding back to core values or past lessons.";
+        guidance = "Anchor to stable foundations and proven personal principles.";
       } else if (need === 'listen') {
-        decisionReflection = "I'm following what you're saying carefully. Tell me a little more about what's happening from your perspective.";
+        insight = "User needs attentive, non-judgmental listening and space to unpack thoughts.";
+        guidance = "Listen attentively without offering premature advice or unsolicited solutions.";
       }
 
-      if (decisionReflection) {
+      if (insight) {
         reflections.push({
           observation,
-          reflection: decisionReflection,
+          insight,
+          guidance,
+          reflection: `${insight} ${guidance}`.trim(),
           confidence: 0.95,
           type: 'general'
         });
@@ -694,27 +747,38 @@ export class ReflectionEngine implements CognitiveEngine {
     // 4.9 Incorporate Personality Decision Style
     if (shouldGenerate('reflection') && trace.personalityDecision) {
       const decision = trace.personalityDecision;
-      let personalityReflection = "";
+      let insight = '';
+      let guidance = '';
+
       if (decision.dominantTrait === 'empathetic') {
-        personalityReflection = "I've been following what you've shared, and I want to understand your situation before jumping to advice.";
+        insight = "Personality style emphasizes deep empathy and careful listening.";
+        guidance = "Lead with warmth, empathy, and emotional attunement.";
       } else if (decision.dominantTrait === 'curious') {
-        personalityReflection = "I'm really curious to learn more about what you're experiencing right now.";
+        insight = "Personality style emphasizes curious inquiry and learning.";
+        guidance = "Ask thoughtful questions and explore the user's perspective.";
       } else if (decision.dominantTrait === 'encouraging') {
-        personalityReflection = "You are making steady progress, and I'm excited to see where this journey takes you.";
+        insight = "Personality style emphasizes uplifting encouragement and optimism.";
+        guidance = "Provide positive reinforcement and supportive energy.";
       } else if (decision.dominantTrait === 'calm') {
-        personalityReflection = "Let's take a deep breath. We can take this step by step, at your own pace.";
+        insight = "Personality style emphasizes calm, steady, grounded pacing.";
+        guidance = "Maintain a soothing, unhurried, reassuring presence.";
       } else if (decision.dominantTrait === 'playful' && decision.humorAllowed) {
-        personalityReflection = "That sounds like a fun adventure! I love seeing this playful side of you.";
+        insight = "Personality style allows lighthearted, playful warmth.";
+        guidance = "Bring playful joy and cheerfulness where appropriate.";
       } else if (decision.dominantTrait === 'direct') {
-        personalityReflection = "Let's look at the facts and focus on what needs to happen next.";
+        insight = "Personality style emphasizes clarity, conciseness, and factual focus.";
+        guidance = "Communicate with direct clarity and actionable precision.";
       } else if (decision.dominantTrait === 'optimistic') {
-        personalityReflection = "I feel very hopeful about the positive changes you are bringing to your life.";
+        insight = "Personality style emphasizes positive outlook and hope.";
+        guidance = "Highlight positive potential and hopeful horizons.";
       }
 
-      if (personalityReflection) {
+      if (insight) {
         reflections.push({
           observation: `Personality engine resolved dominant trait "${decision.dominantTrait}".`,
-          reflection: personalityReflection,
+          insight,
+          guidance,
+          reflection: `${insight} ${guidance}`.trim(),
           confidence: decision.confidence,
           type: 'general'
         });
@@ -723,9 +787,13 @@ export class ReflectionEngine implements CognitiveEngine {
 
     // 5. Default General Reflection if none generated
     if (reflections.length === 0) {
+      const insight = "User is engaging in open dialogue.";
+      const guidance = "Maintain an open, attentive, and supportive companion presence.";
       reflections.push({
         observation: "Standard greeting context.",
-        reflection: "I am right here with you, listening to what's unfolding.",
+        insight,
+        guidance,
+        reflection: `${insight} ${guidance}`.trim(),
         confidence: 0.7,
         type: 'general'
       });

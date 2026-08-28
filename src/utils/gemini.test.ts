@@ -1,199 +1,140 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { classifyOptions, generateReinforcement, generateReinforcementWithReasoning } from './gemini'
-import { ReasoningPackage } from '../lib/orchestrator/types'
+import { LLMGateway, GatewayError } from '@/lib/llm/gateway'
+import { ReasoningPackage } from '@/lib/orchestrator/types'
 
-// Mock GoogleGenerativeAI
-const mockGenerateContent = vi.fn()
-
-vi.mock('@google/generative-ai', () => {
-  class MockGoogleGenerativeAI {
-    constructor(public apiKey: string) {}
-    getGenerativeModel = vi.fn().mockImplementation(() => {
-      return {
-        generateContent: mockGenerateContent,
-      }
-    })
-  }
-  return {
-    GoogleGenerativeAI: MockGoogleGenerativeAI
-  }
-})
-
-describe('Gemini Integration & Fallback Tests', () => {
-  const originalEnv = process.env
-
+describe('Decision LLM Utilities via LLMGateway (FR-009 Compliance)', () => {
   beforeEach(() => {
-    vi.resetModules()
-    vi.clearAllMocks()
-    process.env = { ...originalEnv }
+    vi.restoreAllMocks()
   })
 
-  afterEach(() => {
-    process.env = originalEnv
-  })
-
-  describe('Fallback Pipeline (No API Key)', () => {
-    it('should classify food options correctly via regex fallback', async () => {
-      delete process.env.GEMINI_API_KEY
-      const options = ['Delicious Cheesy Pizza', 'Tasty Salmon Sushi']
-      const result = await classifyOptions(options)
-      
-      expect(result.category).toBe('Food')
-      expect(result.options).toHaveLength(2)
-      expect(result.options[0].text).toBe('Delicious Cheesy Pizza')
-      // Word tags of length > 3
-      expect(result.options[0].tags).toContain('delicious')
-      expect(result.options[0].tags).toContain('cheesy')
-      expect(result.options[0].tags).toContain('pizza')
-    })
-
-    it('should classify entertainment options correctly via regex fallback', async () => {
-      delete process.env.GEMINI_API_KEY
-      const options = ['Watch Netflix movie', 'Play video game']
-      const result = await classifyOptions(options)
-      
-      expect(result.category).toBe('Entertainment')
-    })
-
-    it('should fallback to Category: Other if no keyword matches', async () => {
-      delete process.env.GEMINI_API_KEY
-      const options = ['Solve puzzle', 'Fix chair']
-      const result = await classifyOptions(options)
-      
-      expect(result.category).toBe('Other')
-    })
-
-    it('should generate fallback reinforcement message and reasons for Food category', async () => {
-      delete process.env.GEMINI_API_KEY
-      const result = await generateReinforcement('Fresh Spicy Tuna Sushi', 'Food')
-      
-      expect(result.reasoning).toContain('peace of mind')
-      expect(result.reasoning).toContain('Fresh Spicy Tuna Sushi')
-      expect(result.encouragement).toContain('🍕')
-      expect(result.follow_up_question).toBeDefined()
-    })
-
-    it('should generate fallback reinforcement message and reasons for Other category', async () => {
-      delete process.env.GEMINI_API_KEY
-      const result = await generateReinforcement('Fix chair', 'Other')
-      
-      expect(result.reasoning).toContain('peace of mind')
-      expect(result.reasoning).toContain('Fix chair')
-      expect(result.encouragement).toContain('🍀')
-      expect(result.follow_up_question).toBeDefined()
-    })
-
-    it('should support custom importance context in fallback generation', async () => {
-      delete process.env.GEMINI_API_KEY
-      const result = await generateReinforcement('Read a book', 'Activities', {
-        importance: 'Saving time'
-      })
-
-      expect(result.reasoning).toContain('saving time')
-      expect(result.reasoning).toContain('Read a book')
-      expect(result.reasoning).toContain('quickly and simply')
-    })
-
-    it('should generate fallback reinforcement message with reasoning package', async () => {
-      delete process.env.GEMINI_API_KEY
-      const reasoningPackage: ReasoningPackage = {
-        context: {
-          user_id: 'user_123',
-          user_input: 'Eat Pizza',
-          options: ['Eat Pizza', 'Eat Salad'],
-          importance: 'Saving time',
-          profile_beliefs: [],
-          relevant_memories: [],
-          decision_history: []
-        },
-        observations: [],
-        conflicts: [],
-        uncertainties: []
-      }
-
-      const result = await generateReinforcementWithReasoning(reasoningPackage, 'Eat Pizza', 'Food')
-      
-      expect(result.reasoning).toContain('saving time')
-      expect(result.reasoning).toContain('Eat Pizza')
-      expect(result.encouragement).toContain('🍕')
-      expect(result.follow_up_question).toBeDefined()
-    })
-  })
-
-  describe('Primary AI Pipeline (With API Key & Mocked Responses)', () => {
-    it('should call Gemini API and parse the response for classification', async () => {
-      process.env.GEMINI_API_KEY = 'test_key'
-      
+  describe('classifyOptions', () => {
+    it('should successfully parse classification response from LLMGateway', async () => {
       const mockResult = {
-        category: 'Shopping',
+        category: 'Food',
         options: [
-          { text: 'Buy shoes', tags: ['footwear', 'shopping'] },
-          { text: 'Buy jacket', tags: ['apparel', 'winter'] }
+          { text: 'Cheesy Pizza', tags: ['cheesy', 'pizza'] },
+          { text: 'Salmon Sushi', tags: ['japanese', 'seafood'] }
         ]
       }
-      
-      mockGenerateContent.mockResolvedValueOnce({
-        response: {
-          text: () => JSON.stringify(mockResult)
+
+      vi.spyOn(LLMGateway.prototype, 'generate').mockResolvedValueOnce({
+        requestId: 'test-req',
+        text: JSON.stringify(mockResult),
+        streamed: false,
+        metrics: {
+          providerId: 'gemini',
+          modelId: 'gemini-1.5-flash',
+          finishReason: 'stop',
+          promptTokens: 50,
+          completionTokens: 20,
+          totalTokens: 70,
+          latency: 100,
+          retries: 0,
+          timeoutMs: 5000,
+          gatewayVersion: 'v1.0.0'
         }
       })
 
-      const options = ['Buy shoes', 'Buy jacket']
-      const result = await classifyOptions(options)
-
-      expect(result.category).toBe('Shopping')
-      expect(result.options[0].tags).toContain('footwear')
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      const result = await classifyOptions(['Cheesy Pizza', 'Salmon Sushi'])
+      expect(result.category).toBe('Food')
+      expect(result.options).toHaveLength(2)
+      expect(result.options[0].tags).toEqual(['cheesy', 'pizza'])
     })
 
-    it('should call Gemini API and parse response for reinforcement', async () => {
-      process.env.GEMINI_API_KEY = 'test_key'
+    it('should throw error when LLMGateway fails (no silent fallback)', async () => {
+      vi.spyOn(LLMGateway.prototype, 'generate').mockRejectedValueOnce(
+        new GatewayError('unauthorized', 'Authentication failed')
+      )
 
+      await expect(classifyOptions(['Cheesy Pizza', 'Salmon Sushi'])).rejects.toThrow(
+        'Authentication failed'
+      )
+    })
+  })
+
+  describe('generateReinforcement', () => {
+    it('should successfully parse reinforcement response from LLMGateway', async () => {
       const mockResult = {
-        selected_option: 'Buy shoes',
-        reasoning: 'Reason one and Reason two.',
-        encouragement: 'Supportive statement! 🎉',
-        follow_up_question: 'How do you feel?',
-        mascot: 'ollie'
+        selected_option: 'Cheesy Pizza',
+        reasoning: 'Pizza brings delicious comfort when you need a pause.',
+        encouragement: 'Enjoy every slice! 🍕',
+        follow_up_question: 'How does that sound?',
+        mascot: 'munch'
       }
 
-      mockGenerateContent.mockResolvedValueOnce({
-        response: {
-          text: () => JSON.stringify(mockResult)
+      vi.spyOn(LLMGateway.prototype, 'generate').mockResolvedValueOnce({
+        requestId: 'test-req-2',
+        text: JSON.stringify(mockResult),
+        streamed: false,
+        metrics: {
+          providerId: 'gemini',
+          modelId: 'gemini-1.5-flash',
+          finishReason: 'stop',
+          promptTokens: 80,
+          completionTokens: 30,
+          totalTokens: 110,
+          latency: 120,
+          retries: 0,
+          timeoutMs: 5000,
+          gatewayVersion: 'v1.0.0'
         }
       })
 
-      const result = await generateReinforcement('Buy shoes', 'Shopping')
+      const result = await generateReinforcement('Cheesy Pizza', 'Food', {
+        importance: 'Peace of mind'
+      })
 
-      expect(result.reasoning).toBe('Reason one and Reason two.')
-      expect(result.encouragement).toContain('🎉')
-      expect(result.follow_up_question).toBe('How do you feel?')
-      expect(result.mascot).toBe('ollie')
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(result.selected_option).toBe('Cheesy Pizza')
+      expect(result.reasoning).toBe('Pizza brings delicious comfort when you need a pause.')
+      expect(result.encouragement).toBe('Enjoy every slice! 🍕')
+      expect(result.mascot).toBe('munch')
     })
 
-    it('should call Gemini API and parse response for reinforcement with reasoning', async () => {
-      process.env.GEMINI_API_KEY = 'test_key'
+    it('should throw error when LLMGateway fails (no silent fallback)', async () => {
+      vi.spyOn(LLMGateway.prototype, 'generate').mockRejectedValueOnce(
+        new GatewayError('timeout', 'LLM request timed out.')
+      )
 
+      await expect(generateReinforcement('Cheesy Pizza', 'Food')).rejects.toThrow(
+        'LLM request timed out.'
+      )
+    })
+  })
+
+  describe('generateReinforcementWithReasoning', () => {
+    it('should successfully parse reasoning-backed reinforcement response from LLMGateway', async () => {
       const mockResult = {
-        selected_option: 'Buy shoes',
-        reasoning: 'Reason one and Reason two.',
-        encouragement: 'Supportive statement! 🎉',
-        follow_up_question: 'How do you feel?',
-        mascot: 'ollie'
+        selected_option: 'Cheesy Pizza',
+        reasoning: 'Based on your energy level, pizza is the coziest choice.',
+        encouragement: 'Take it easy today! 🍀',
+        follow_up_question: 'Ready to order?',
+        mascot: 'pandy'
       }
 
-      mockGenerateContent.mockResolvedValueOnce({
-        response: {
-          text: () => JSON.stringify(mockResult)
+      vi.spyOn(LLMGateway.prototype, 'generate').mockResolvedValueOnce({
+        requestId: 'test-req-3',
+        text: `\`\`\`json\n${JSON.stringify(mockResult)}\n\`\`\``,
+        streamed: false,
+        metrics: {
+          providerId: 'gemini',
+          modelId: 'gemini-1.5-flash',
+          finishReason: 'stop',
+          promptTokens: 100,
+          completionTokens: 40,
+          totalTokens: 140,
+          latency: 150,
+          retries: 0,
+          timeoutMs: 5000,
+          gatewayVersion: 'v1.0.0'
         }
       })
 
       const reasoningPackage: ReasoningPackage = {
         context: {
           user_id: 'user_123',
-          user_input: 'Buy shoes',
-          options: ['Buy shoes', 'Buy pants'],
+          user_input: 'Cheesy Pizza',
+          options: ['Cheesy Pizza', 'Salad'],
           profile_beliefs: [],
           relevant_memories: [],
           decision_history: []
@@ -203,26 +144,41 @@ describe('Gemini Integration & Fallback Tests', () => {
         uncertainties: []
       }
 
-      const result = await generateReinforcementWithReasoning(reasoningPackage, 'Buy shoes', 'Shopping')
+      const result = await generateReinforcementWithReasoning(
+        reasoningPackage,
+        'Cheesy Pizza',
+        'Food',
+        'Alex',
+        'Alex'
+      )
 
-      expect(result.reasoning).toBe('Reason one and Reason two.')
-      expect(result.encouragement).toContain('🎉')
-      expect(result.follow_up_question).toBe('How do you feel?')
-      expect(result.mascot).toBe('ollie')
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(result.selected_option).toBe('Cheesy Pizza')
+      expect(result.reasoning).toBe('Based on your energy level, pizza is the coziest choice.')
+      expect(result.mascot).toBe('pandy')
     })
 
-    it('should trigger fallback if Gemini API times out or throws error', async () => {
-      process.env.GEMINI_API_KEY = 'test_key'
-      
-      // Simulate Gemini failure
-      mockGenerateContent.mockRejectedValueOnce(new Error('API Error'))
+    it('should throw error when LLMGateway fails with reasoning (no silent fallback)', async () => {
+      vi.spyOn(LLMGateway.prototype, 'generate').mockRejectedValueOnce(
+        new GatewayError('unavailable', 'Service unavailable')
+      )
 
-      const options = ['Delicious Cheesy Pizza', 'Tasty Salmon Sushi']
-      const result = await classifyOptions(options)
+      const reasoningPackage: ReasoningPackage = {
+        context: {
+          user_id: 'user_123',
+          user_input: 'Cheesy Pizza',
+          options: ['Cheesy Pizza', 'Salad'],
+          profile_beliefs: [],
+          relevant_memories: [],
+          decision_history: []
+        },
+        observations: [],
+        conflicts: [],
+        uncertainties: []
+      }
 
-      // Should fall back gracefully to Food category
-      expect(result.category).toBe('Food')
+      await expect(
+        generateReinforcementWithReasoning(reasoningPackage, 'Cheesy Pizza', 'Food')
+      ).rejects.toThrow('Service unavailable')
     })
   })
 })

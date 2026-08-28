@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 import { addObservation } from './service';
 import { HUPSObservation, HUPSDimension } from './types';
 
@@ -21,7 +22,7 @@ export async function analyzeAndLogObservations(
   payload: any
 ) {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: {
       responseMimeType: 'application/json'
     }

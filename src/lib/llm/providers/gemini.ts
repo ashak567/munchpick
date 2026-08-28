@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
 import { LLMProvider, LLMRequest, LLMResponse, ProviderCapabilities } from '../types';
 import { PromptRenderer } from '../renderer';
+import { llmConfig } from '../config';
 
 export class GeminiProviderAdapter implements LLMProvider {
   public id = 'gemini';
@@ -9,34 +10,36 @@ export class GeminiProviderAdapter implements LLMProvider {
   public validateCapabilities(capabilities: ProviderCapabilities): boolean {
     // Gemini supports streaming and reasoning; vision is optional
     if (capabilities.supportsReasoning) {
-      //gemini-1.5-flash or similar supports reasoning
       return true;
     }
     return true;
   }
 
   public async generate(request: LLMRequest): Promise<LLMResponse> {
-    const apiKey = serverEnv.GEMINI_API_KEY || '';
+    const apiKey = serverEnv?.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
     if (!apiKey || apiKey === 'MOCK_KEY') {
       throw new Error('Gemini API key is missing or invalid (auth error).');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? 'gemini-1.5-pro' : 'gemini-1.5-flash');
+    const config = llmConfig.providers.gemini;
+    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? (config?.reasoningModel || 'gemini-1.5-pro') : (config?.model || 'gemini-1.5-flash'));
 
     const model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {
-        temperature: request.temperature ?? 0.7,
-        maxOutputTokens: request.maxTokens ?? 250
+        temperature: request.temperature ?? config?.temperature ?? 0.7,
+        maxOutputTokens: request.maxTokens ?? config?.maxTokens ?? 250
       }
     });
 
     const promptText = PromptRenderer.renderToText(request.promptPackage);
-    console.log("========== PROMPT SENT TO GEMINI ==========");
-    console.log(promptText);
-    console.log("===========================================");
+    const startTime = Date.now();
+    console.log(`[GeminiAdapter] Request Started (model=${modelName}, promptLength=${promptText.length})`);
+    
     const response = await model.generateContent(promptText);
+    const latency = Date.now() - startTime;
+    console.log(`[GeminiAdapter] Request Completed (model=${modelName}, latency=${latency}ms)`);
     const text = response.response.text().trim();
 
     return {
@@ -48,18 +51,19 @@ export class GeminiProviderAdapter implements LLMProvider {
   }
 
   public async *stream(request: LLMRequest): AsyncGenerator<string, void, unknown> {
-    const apiKey = serverEnv.GEMINI_API_KEY || '';
+    const apiKey = serverEnv?.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
     if (!apiKey || apiKey === 'MOCK_KEY') {
       throw new Error('Gemini API key is missing or invalid (auth error).');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? 'gemini-1.5-pro' : 'gemini-1.5-flash');
+    const config = llmConfig.providers.gemini;
+    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? (config?.reasoningModel || 'gemini-1.5-pro') : (config?.model || 'gemini-1.5-flash'));
     const model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {
-        temperature: request.temperature ?? 0.7,
-        maxOutputTokens: request.maxTokens ?? 250
+        temperature: request.temperature ?? config?.temperature ?? 0.7,
+        maxOutputTokens: request.maxTokens ?? config?.maxTokens ?? 250
       }
     });
 

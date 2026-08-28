@@ -25,6 +25,12 @@ const serverEnvSchema = clientEnvSchema.extend({
     .min(1, 'GEMINI_API_KEY must not be empty'),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_REASONING_MODEL: z.string().optional(),
+  GEMINI_AUXILIARY_MODEL: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().optional(),
+  ANTHROPIC_REASONING_MODEL: z.string().optional(),
+  ANTHROPIC_AUXILIARY_MODEL: z.string().optional(),
+  LLM_DEFAULT_PROVIDER: z.string().optional(),
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +93,12 @@ function getServerEnv() {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     GEMINI_MODEL: process.env.GEMINI_MODEL,
     GEMINI_REASONING_MODEL: process.env.GEMINI_REASONING_MODEL,
+    GEMINI_AUXILIARY_MODEL: process.env.GEMINI_AUXILIARY_MODEL,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+    ANTHROPIC_REASONING_MODEL: process.env.ANTHROPIC_REASONING_MODEL,
+    ANTHROPIC_AUXILIARY_MODEL: process.env.ANTHROPIC_AUXILIARY_MODEL,
+    LLM_DEFAULT_PROVIDER: process.env.LLM_DEFAULT_PROVIDER,
   })
 
   if (!parsed.success) {

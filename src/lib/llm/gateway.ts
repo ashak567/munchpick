@@ -171,10 +171,6 @@ export class LLMGateway {
 
     const provider = this.resolver.resolve(capabilities, HEALTH_REGISTRY, request.providerId);
     const providerId = provider.id;
-    console.log(`[LLMGateway] [${requestId}] Step: Provider Selected (id=${providerId})`);
-
-    // Circuit Breaker check
-    this.checkCircuitBreaker(providerId);
 
     const config = llmConfig.providers[providerId];
     if (!config) {
@@ -183,9 +179,14 @@ export class LLMGateway {
 
     // Determine target model role based on reasoning capability request
     const supportsReasoning = pkg.providerHints?.supportsReasoning ?? false;
-    const targetModel = (supportsReasoning && config.reasoningModel)
+    const targetModel = request.model || ((supportsReasoning && config.reasoningModel)
       ? config.reasoningModel
-      : config.model;
+      : config.model);
+
+    console.log(`[LLMGateway] [${requestId}] Step: Provider Selected (provider=${providerId}, model=${targetModel})`);
+
+    // Circuit Breaker check
+    this.checkCircuitBreaker(providerId);
 
     // 3. Token Budget Validation
     const expectedOutputTokens = request.maxTokens ?? config.maxTokens;
@@ -208,7 +209,7 @@ export class LLMGateway {
     while (attempt < maxRetries) {
       attempt++;
       try {
-        console.log(`[LLMGateway] [${requestId}] Step: Provider Sent (attempt=${attempt}/${maxRetries})`);
+        console.log(`[LLMGateway] [${requestId}] Step: Request Started (provider=${providerId}, model=${targetModel}, attempt=${attempt}/${maxRetries}, estTokens=${pkg.estimatedTokens})`);
 
         const execPromise = provider.generate({
           promptPackage: pkg,
@@ -225,7 +226,7 @@ export class LLMGateway {
         const response = await Promise.race([execPromise, timeoutPromise]) as LLMResponse;
         const latency = Date.now() - startTime;
 
-        console.log(`[LLMGateway] [${requestId}] Step: Provider Returned (latency=${latency}ms)`);
+        console.log(`[LLMGateway] [${requestId}] Step: Request Completed (provider=${providerId}, model=${targetModel}, latency=${latency}ms, promptTokens=${response.promptTokens}, completionTokens=${response.completionTokens}, status=success)`);
 
         // Record health success stats
         this.recordSuccess(providerId, latency);
@@ -243,8 +244,6 @@ export class LLMGateway {
           gatewayVersion: 'v1.0.0'
         };
 
-        console.log(`[LLMGateway] [${requestId}] Step: Completed`);
-
         return {
           requestId,
           text: response.text,
@@ -255,7 +254,7 @@ export class LLMGateway {
         const mappedErr = this.mapError(err);
         lastGatewayError = mappedErr;
 
-        console.warn(`[LLMGateway] [${requestId}] Attempt ${attempt} failed: ${mappedErr.message}`);
+        console.warn(`[LLMGateway] [${requestId}] Step: Request Failed (provider=${providerId}, model=${targetModel}, attempt=${attempt}/${maxRetries}, error=${mappedErr.message}, status=failure)`);
 
         // Only retry retryable errors
         if (!this.isRetryable(mappedErr)) {

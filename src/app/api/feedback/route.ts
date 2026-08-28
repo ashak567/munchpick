@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { calculateNewScore, type FeedbackRating } from '@/utils/preferences'
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer'
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Trigger HUPS Analysis asynchronously (non-blocking)
+    // Trigger HUPS Analysis asynchronously via after() (non-blocking)
     const feedbackPayload = {
       decision: {
         selected_option: decision.selected_option,
@@ -178,11 +178,14 @@ export async function POST(request: NextRequest) {
       rating: rating,
       tags: selectedOptionTags
     };
-    analyzeAndLogObservations(user.id, 'feedback', feedbackRecord.id, feedbackPayload)
-      .catch((err) => console.error('HUPS Feedback Analysis error:', err));
-
-    analyzeAndDistillMemories(user.id, 'feedback', feedbackRecord.id, feedbackPayload)
-      .catch((err) => console.error('Memory Distillation error:', err));
+    after(async () => {
+      await Promise.allSettled([
+        analyzeAndLogObservations(user.id, 'feedback', feedbackRecord.id, feedbackPayload)
+          .catch((err) => console.error('HUPS Feedback Analysis error:', err)),
+        analyzeAndDistillMemories(user.id, 'feedback', feedbackRecord.id, feedbackPayload)
+          .catch((err) => console.error('Memory Distillation error:', err))
+      ]);
+    });
 
     return NextResponse.json({
       success: true,

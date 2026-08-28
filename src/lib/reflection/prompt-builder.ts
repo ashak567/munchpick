@@ -120,27 +120,62 @@ export class PromptBuilderEngine implements CognitiveEngine {
       });
     }
 
-    // 6. Context Section (From Context Assembly reflection / conversation blocks)
+    // 6. Context Section (From Context Assembly reflection block or trace.reflections)
     const reflectionBlock = trace.contextAssembly?.blocks.find(b => b.category === 'reflection');
     if (reflectionBlock) {
       sections.push({
-        id: 'reflection_context',
+        id: 'cognitive_reflections',
         type: 'context',
         priority: 0.5,
         required: false,
         content: reflectionBlock.content
+      });
+    } else if (trace.reflections && trace.reflections.length > 0) {
+      sections.push({
+        id: 'cognitive_reflections',
+        type: 'context',
+        priority: 0.5,
+        required: false,
+        content: {
+          reflections: trace.reflections
+        }
       });
     }
 
     // 7. Conversation Section (Consume isolated conversation block from Context Assembly)
     const conversationBlock = trace.contextAssembly?.blocks.find(b => b.category === 'conversation');
     if (conversationBlock) {
+      const recentHistory = conversationBlock.content?.recentHistory;
+      if (Array.isArray(recentHistory) && recentHistory.length > 0) {
+        sections.push({
+          id: 'recent_conversation_history',
+          type: 'conversation',
+          priority: 0.45,
+          required: false,
+          content: recentHistory
+        });
+      }
+
+      // 7.5 Current User Message Section (Isolated current turn)
+      const currentInput = typeof conversationBlock.content?.userInput === 'string'
+        ? conversationBlock.content.userInput
+        : (typeof context.user_input === 'string' ? context.user_input : '');
+
       sections.push({
-        id: 'conversation_history',
+        id: 'current_user_message',
         type: 'conversation',
-        priority: 0.4,
+        priority: 0.40,
         required: true,
-        content: conversationBlock.content
+        content: currentInput
+      });
+    } else {
+      const fallbackInput = typeof context?.user_input === 'string' ? context.user_input : '';
+      sections.push({
+        id: 'current_user_message',
+        type: 'conversation',
+        priority: 0.40,
+        required: true,
+        content: fallbackInput
       });
     }
 
@@ -168,7 +203,7 @@ export class PromptBuilderEngine implements CognitiveEngine {
       type: 'instructions',
       priority: 0.2,
       required: true,
-      content: 'Construct the response strictly adhering to the response plan sections, personality guidelines, and active mascot speaking style. Do not leak internal tags, priorities, or cognitive scores in the output.'
+      content: 'Construct the response strictly adhering to the response plan sections, personality guidelines, and active mascot speaking style. Respond directly to the CURRENT_USER_MESSAGE. RECENT_CONVERSATION_HISTORY provides past dialogue context for continuity—use it to understand the ongoing conversation and avoid repeating previous assistant replies or questions. COGNITIVE_REFLECTIONS are internal cognitive insights—do not copy their wording verbatim; express their meaning naturally. Do not leak internal tags, priorities, or cognitive scores in the output.'
     });
 
     // Sort by priority descending
@@ -222,11 +257,15 @@ export class PromptBuilderEngine implements CognitiveEngine {
     }
 
     mustDo.push(
-      "Respond primarily to the user's MOST RECENT message."
+      "Respond primarily to the CURRENT_USER_MESSAGE."
     );
 
     mustDo.push(
-      "Do not repeat previous assistant responses."
+      "Do not repeat previous assistant responses provided in RECENT_CONVERSATION_HISTORY."
+    );
+
+    mustDo.push(
+      "Express the semantic meaning of cognitive insights naturally without copying reflection wording verbatim."
     );
 
     avoid.push(

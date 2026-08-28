@@ -30,6 +30,7 @@ export interface LLMProvider {
 export interface GatewayRequest {
   promptPackage: PromptPackage;
   providerId?: string;
+  model?: string;
   temperature?: number;
   maxTokens?: number;
 }

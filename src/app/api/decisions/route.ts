@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { classifyOptions, generateReinforcement, generateReinforcementWithReasoning } from '@/utils/gemini'
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer'
@@ -242,51 +242,36 @@ export async function POST(request: NextRequest) {
     currentStage = '8-GENERATE-REINFORCEMENT'
     logStage(currentStage, 'STARTED')
     let reinforcement: any
-    try {
-      if (reasoningPackage) {
-        reinforcement = await generateReinforcementWithReasoning(
-          reasoningPackage,
-          selectedOption.text,
-          category,
-          activeNickname,
+    if (reasoningPackage) {
+      reinforcement = await generateReinforcementWithReasoning(
+        reasoningPackage,
+        selectedOption.text,
+        category,
+        activeNickname,
+        userName
+      )
+    } else {
+      // Fallback: use basic reinforcement without reasoning package
+      reinforcement = await generateReinforcement(
+        selectedOption.text,
+        category,
+        {
+          importance,
+          emotionalState,
+          currentContext,
+          userPreferences: userPreferencesText,
+          pastDecisions: pastDecisionsText,
+          feedbackHistory: feedbackHistoryText,
+          userNickname: activeNickname,
           userName
-        )
-      } else {
-        // Fallback: use basic reinforcement without reasoning package
-        reinforcement = await generateReinforcement(
-          selectedOption.text,
-          category,
-          {
-            importance,
-            emotionalState,
-            currentContext,
-            userPreferences: userPreferencesText,
-            pastDecisions: pastDecisionsText,
-            feedbackHistory: feedbackHistoryText,
-            userNickname: activeNickname,
-            userName
-          }
-        )
-      }
-      logStage(currentStage, 'SUCCESS', {
-        mascot: reinforcement.mascot,
-        has_reasoning: !!reinforcement.reasoning,
-        has_encouragement: !!reinforcement.encouragement
-      })
-    } catch (reinforcementErr) {
-      logStage(currentStage, 'FAILED', {
-        error: reinforcementErr instanceof Error ? reinforcementErr.message : String(reinforcementErr)
-      })
-      // Hard fallback if everything fails
-      reinforcement = {
-        selected_option: selectedOption.text,
-        reasoning: 'This feels like a gentle starting point for you right now.',
-        encouragement: 'You don\'t need the perfect choice. 🍀',
-        follow_up_question: 'How does this path feel to you?',
-        mascot: 'munch'
-      }
-      logStage(currentStage + '-FALLBACK', 'SUCCESS')
+        }
+      )
     }
+    logStage(currentStage, 'SUCCESS', {
+      mascot: reinforcement.mascot,
+      has_reasoning: !!reinforcement.reasoning,
+      has_encouragement: !!reinforcement.encouragement
+    })
 
     // ── STAGE 9: Insert Decision Record ──
     currentStage = '9-INSERT-DECISION'
@@ -364,7 +349,7 @@ export async function POST(request: NextRequest) {
       logStage(currentStage, 'SUCCESS', { options_inserted: optionsPayload.length })
     }
 
-    // ── STAGE 11: HUPS + Memory Async (non-blocking) ──
+    // ── STAGE 11: HUPS + Memory Async (non-blocking via after()) ──
     currentStage = '11-ASYNC-ANALYSIS'
     logStage(currentStage, 'STARTED')
     const decisionPayload = {
@@ -375,20 +360,23 @@ export async function POST(request: NextRequest) {
       currentContext,
       emotionalState
     };
-    analyzeAndLogObservations(user.id, 'decision', decisionRecord.id, decisionPayload)
-      .then(() => logStage('11a-HUPS-ANALYSIS', 'SUCCESS'))
-      .catch((err) => {
-        logStage('11a-HUPS-ANALYSIS', 'FAILED', { error: err instanceof Error ? err.message : String(err) })
-        console.error('HUPS Decision Analysis error:', err)
-      });
-
-    analyzeAndDistillMemories(user.id, 'decision', decisionRecord.id, decisionPayload)
-      .then(() => logStage('11b-MEMORY-DISTILL', 'SUCCESS'))
-      .catch((err) => {
-        logStage('11b-MEMORY-DISTILL', 'FAILED', { error: err instanceof Error ? err.message : String(err) })
-        console.error('Memory Distillation error:', err)
-      });
-    logStage(currentStage, 'SUCCESS', { note: 'Dispatched async tasks' })
+    after(async () => {
+      await Promise.allSettled([
+        analyzeAndLogObservations(user.id, 'decision', decisionRecord.id, decisionPayload)
+          .then(() => logStage('11a-HUPS-ANALYSIS', 'SUCCESS'))
+          .catch((err) => {
+            logStage('11a-HUPS-ANALYSIS', 'FAILED', { error: err instanceof Error ? err.message : String(err) })
+            console.error('HUPS Decision Analysis error:', err)
+          }),
+        analyzeAndDistillMemories(user.id, 'decision', decisionRecord.id, decisionPayload)
+          .then(() => logStage('11b-MEMORY-DISTILL', 'SUCCESS'))
+          .catch((err) => {
+            logStage('11b-MEMORY-DISTILL', 'FAILED', { error: err instanceof Error ? err.message : String(err) })
+            console.error('Memory Distillation error:', err)
+          })
+      ]);
+    });
+    logStage(currentStage, 'SUCCESS', { note: 'Dispatched async tasks with after()' })
 
     // ── STAGE 12: Return Response ──
     currentStage = '12-RESPONSE'

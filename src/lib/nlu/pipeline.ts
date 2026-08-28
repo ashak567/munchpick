@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 import { ContextPackage } from '../orchestrator/types';
 import { NLUObservationsOutput } from './types';
 import { analyzeContextFallback } from './fallback';
@@ -19,7 +20,7 @@ export async function runNLUPipeline(context: ContextPackage): Promise<NLUObserv
   }
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.1 // Low temperature for deterministic NLU classification

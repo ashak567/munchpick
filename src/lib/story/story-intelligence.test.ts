@@ -307,7 +307,7 @@ describe('StoryIntelligenceEngine tests', () => {
     const refEngine = new ReflectionEngine();
     const result = await refEngine.execute(initialTrace, context);
 
-    const resilienceReflection = result.reflections.find(r => r.reflection.includes("keep moving forward"));
+    const resilienceReflection = result.reflections.find(r => r.reflection.includes("recovering quickly from setbacks"));
     expect(resilienceReflection).toBeDefined();
     expect(resilienceReflection?.observation).toContain('insight');
   });

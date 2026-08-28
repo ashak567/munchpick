@@ -1,9 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { serverEnv } from '@/lib/env'
+import * as crypto from 'crypto'
+import { LLMGateway } from '@/lib/llm/gateway'
+import { PromptPackage, PromptSection } from '@/lib/reflection/types'
 import { ReasoningPackage } from '@/lib/orchestrator/types'
-
-// Initialize the Gemini API client — guaranteed valid by env.ts validation
-const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY)
 
 // Enforce category types
 export type Category = 'Food' | 'Entertainment' | 'Activities' | 'Shopping' | 'Other'
@@ -26,75 +24,121 @@ export interface ReinforcementResult {
   mascot: string
 }
 
-// Timeout helper
-const withTimeout = <T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> => {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMessage)), ms))
-  ])
-}
-
 /**
- * Task 3.2: Classify a list of options and extract descriptive tags.
+ * Builds a deterministic PromptPackage conforming to LLMGateway validation constraints.
  */
-export async function classifyOptions(options: string[]): Promise<ClassificationResult> {
-  const prompt = `
-You are the backend classification helper for Munch, a gentle four-leaf clover companion.
-Analyze the following list of options and:
-1. Detect the overall single category for this list. Supported categories: "Food", "Entertainment", "Activities", "Shopping", "Other".
-2. For each option, extract 2-4 lowercase descriptive tags (e.g. food tags like "healthy", "sweet", "japanese"; entertainment tags like "action", "comedy", "relaxing").
+function buildPromptPackage(sections: PromptSection[]): PromptPackage {
+  sections.sort((a, b) => b.priority - a.priority)
+  const rawString = sections
+    .map(s => `${s.id}:${s.type}:${s.priority}:${typeof s.content === 'string' ? s.content : JSON.stringify(s.content)}`)
+    .join('|')
+  const checksum = crypto.createHash('sha256').update(rawString).digest('hex')
+  const totalChars = sections.reduce((acc, s) => {
+    const contentStr = typeof s.content === 'string' ? s.content : JSON.stringify(s.content)
+    return acc + contentStr.length
+  }, 0)
+  const estimatedTokens = Math.ceil(totalChars / 4)
 
-List of options to process:
-${options.map((opt, i) => `- [${i}]: "${opt}"`).join('\n')}
-
-Output must follow this JSON schema:
-{
-  "category": "Food" | "Entertainment" | "Activities" | "Shopping" | "Other",
-  "options": [
-    {
-      "text": "the exact option text",
-      "tags": ["tag1", "tag2", "tag3"]
-    }
-  ]
-}
-`
-
-  try {
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json'
-      }
-    })
-
-    // 4-second timeout limit for classification
-    const response = await withTimeout(
-      model.generateContent(prompt),
-      4000,
-      'Gemini classification timed out'
-    )
-    
-    const text = response.response.text()
-    const parsed = JSON.parse(text) as ClassificationResult
-
-    // Validate category
-    const validCategories: Category[] = ['Food', 'Entertainment', 'Activities', 'Shopping', 'Other']
-    if (!validCategories.includes(parsed.category)) {
-      parsed.category = 'Other'
-    }
-
-    return parsed
-  } catch (error) {
-    console.error("Gemini classification failed, running fallback pipeline:", error)
-    return getFallbackClassification(options)
+  return {
+    version: 'v1.7.0',
+    templateVersion: 'v1.0.0',
+    sections,
+    estimatedTokens,
+    providerHints: { supportsStreaming: true, supportsVision: false, supportsReasoning: false },
+    checksum,
+    directives: { mustDo: [], shouldDo: [], avoid: [] },
+    statistics: { sections: sections.length, estimatedTokens, checksum, compressionRatio: 1.0 },
+    renderStrategy: 'conversation'
   }
 }
 
 /**
- * Task 3.5: Generate positive reinforcement for the selected option.
+ * Strips markdown code fences (```json ... ```) and parses the response into JSON.
  */
+function parseJsonResponse<T>(rawText: string): T {
+  let cleaned = rawText.trim()
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.slice(7)
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.slice(3)
+  }
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.slice(0, -3)
+  }
+  cleaned = cleaned.trim()
+  return JSON.parse(cleaned) as T
+}
+
 /**
- * Task 3.5: Generate positive reinforcement for the selected option.
+ * Classify a list of options and extract descriptive tags via LLMGateway.
+ * Throws GatewayError or SyntaxError on failure (no silent synthetic fallbacks).
+ */
+export async function classifyOptions(options: string[]): Promise<ClassificationResult> {
+  const gateway = new LLMGateway()
+  const pkg = buildPromptPackage([
+    {
+      id: 'system_guidelines',
+      type: 'system',
+      priority: 1.0,
+      required: true,
+      content: 'You are the backend classification helper for Munch, a gentle four-leaf clover companion.'
+    },
+    {
+      id: 'mascot_identity_munch',
+      type: 'identity',
+      priority: 0.9,
+      required: true,
+      content: { mascotId: 'munch', identity: 'Classifier' }
+    },
+    {
+      id: 'personality_guidelines',
+      type: 'personality',
+      priority: 0.8,
+      required: true,
+      content: { dominantTrait: 'calm', communicationStyle: 'gentle' }
+    },
+    {
+      id: 'conversation_history',
+      type: 'conversation',
+      priority: 0.4,
+      required: true,
+      content: `List of options to process:\n${options.map((opt, i) => `- [${i}]: "${opt}"`).join('\n')}`
+    },
+    {
+      id: 'response_plan',
+      type: 'response_plan',
+      priority: 0.3,
+      required: true,
+      content: {
+        task: 'Detect single category ("Food", "Entertainment", "Activities", "Shopping", "Other") and extract 2-4 lowercase descriptive tags per option.',
+        schema: {
+          category: 'Food | Entertainment | Activities | Shopping | Other',
+          options: [{ text: 'the exact option text', tags: ['tag1', 'tag2'] }]
+        }
+      }
+    },
+    {
+      id: 'output_instructions',
+      type: 'instructions',
+      priority: 0.2,
+      required: true,
+      content: 'Output strictly JSON matching the schema with category and options array. Do not include markdown code block formatting.'
+    }
+  ])
+
+  const result = await gateway.generate({ promptPackage: pkg, maxTokens: 400 })
+  const parsed = parseJsonResponse<ClassificationResult>(result.text)
+
+  const validCategories: Category[] = ['Food', 'Entertainment', 'Activities', 'Shopping', 'Other']
+  if (!validCategories.includes(parsed.category)) {
+    parsed.category = 'Other'
+  }
+  return parsed
+}
+
+/**
+ * Generate positive reinforcement for the selected option via LLMGateway.
+ * Throws GatewayError or SyntaxError on failure (no silent synthetic fallbacks).
  */
 export async function generateReinforcement(
   selectedOption: string, 
@@ -110,105 +154,93 @@ export async function generateReinforcement(
     userName?: string
   }
 ): Promise<ReinforcementResult> {
-  const nickname = context?.userNickname || context?.userName || 'friend';
-  const prompt = `
-You are Munch 🍀, a gentle four-leaf clover companion that helps ${nickname} slow down, understand their thoughts, and make decisions they feel comfortable with.
-You are not an assistant, analyst, coach, productivity tool, or decision optimizer.
-Your core philosophy is: "I am not here to decide for you. I am here to help you hear yourself more clearly."
-Your purpose is to help ${nickname} feel understood, quiet the noise in their mind, and find a cozy path forward.
+  const nickname = context?.userNickname || context?.userName || 'friend'
+  const gateway = new LLMGateway()
 
-Mascots in Munch:
-${nickname} is guided by 9 distinct mascots, each representing a specific feeling/mood:
-* 'munch': Understanding (default mascot)
-* 'ollie': Reflection (thoughtful, study, reflective, analyzing options)
-* 'ellie': Reassurance (anxious, in doubt, second-guessing, unsure)
-* 'pandy': Comfort (tired, sad, looking for cozy warmth)
-* 'dobby': Encouragement (needs motivation, starting energy, activity)
-* 'coco': Curiosity (exploring new things, curious)
-* 'froggy': Calm (overwhelmed, stressed, busy, chaotic)
-* 'bubbles': Openness (relaxed, open-minded, flexible)
-* 'chicky': Joy (happy, celebrating positive steps)
-
-Core Principles:
-* Slow down and reduce overthinking.
-* Encourage progress and peace of mind over perfection or optimization.
-* Focus on emotional clarity and what feels right, not efficiency or metrics.
-* Build trust and a warm space over time.
-* Make ${nickname} feel known, understood, and supported.
-
-Personality Traits:
-* Gentle, Observant, Playful, Encouraging, Thoughtful, Calm, Optimistic.
-* Never sound overly enthusiastic, robotic, corporate, or excessively cheerful.
-
-Decision Framework context:
-- Category of options: "${category}"
-- Selected option: "${selectedOption}"
-${context?.importance ? `- What is most important to the user right now: ${context.importance}` : ''}
-${context?.emotionalState ? `- Emotional state/feeling: ${context.emotionalState}` : ''}
-${context?.currentContext ? `- Current context: ${context.currentContext}` : ''}
-${context?.userPreferences ? `- Things that usually bring comfort: ${context.userPreferences}` : ''}
-${context?.pastDecisions ? `- Past paths chosen: ${context.pastDecisions}` : ''}
-${context?.feedbackHistory ? `- Past comfort reflections: ${context.feedbackHistory}` : ''}
-
-Response Structure Rules:
-You must structure the reinforcement message according to these four steps:
-1. Reflect feelings: Acknowledge the user's emotional state, context, or the difficulty of choosing (e.g. "I can see why this feels difficult.").
-2. Explain why it feels right: Connect the selected option to what is most important to them right now (e.g., if "Saving time" is important, explain how this option gets them moving quickly).
-3. Reassure the user: Remind them that they don't need a perfect choice (e.g. "You don't need a perfect choice right now.").
-4. Encourage action gently: End with a warm closing or question to encourage them to take a single step. Make sure to address them naturally as ${nickname} if it feels warm and conversational.
-
-Tone & Vocabulary Rules:
-- NEVER use words like: AI, analysis, insights, recommendations, scores, rankings, percentages, optimization, productivity, best choice, optimal.
-- Speak naturally and reassuringly. Never sound robotic, analytical, or objective.
-- Keep responses concise. Combined word count target: 60-120 words.
-- Use emojis sparingly (max 1).
-
-Ask yourself:
-- What is ${nickname} feeling right now?
-- Which of the 9 mascots best matches ${nickname}'s emotional state right now? If they are overwhelmed/stressed, select 'froggy'. If they are doubting or anxious, select 'ellie'. If they need encouragement, select 'dobby'.
-
-Output Structure:
-You MUST return a JSON response with the following keys:
-{
-  "selected_option": "${selectedOption}",
-  "reasoning": "Combining steps 1 (reflect feelings) and 2 (explain why it feels right) into a comforting explanation of why this path aligns with what is most important to them.",
-  "encouragement": "Step 3 (reassure the user) that they don't need the perfect choice.",
-  "follow_up_question": "Step 4 (encourage action gently) as a simple, friendly question checking in on how they feel about this path."
-  "mascot": "munch" | "ollie" | "ellie" | "pandy" | "dobby" | "coco" | "froggy" | "bubbles" | "chicky"
-}
-`
-
-  try {
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json'
+  const pkg = buildPromptPackage([
+    {
+      id: 'system_guidelines',
+      type: 'system',
+      priority: 1.0,
+      required: true,
+      content: `You are Munch 🍀, a gentle four-leaf clover companion that helps ${nickname} slow down, understand their thoughts, and make decisions they feel comfortable with.`
+    },
+    {
+      id: 'mascot_identity_munch',
+      type: 'identity',
+      priority: 0.9,
+      required: true,
+      content: {
+        mascotId: 'munch',
+        identity: 'Companion',
+        mascots: 'munch (Understanding), ollie (Reflection), ellie (Reassurance), pandy (Comfort), dobby (Encouragement), coco (Curiosity), froggy (Calm), bubbles (Openness), chicky (Joy)'
       }
-    })
-
-    // 4-second timeout limit for reinforcement
-    const response = await withTimeout(
-      model.generateContent(prompt),
-      4000,
-      'Gemini reinforcement generation timed out'
-    )
-
-    const text = response.response.text()
-    const parsed = JSON.parse(text) as ReinforcementResult
-    
-    // Validate mascot
-    const validMascots = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky']
-    if (!validMascots.includes(parsed.mascot)) {
-      parsed.mascot = detectMascotFromContext(context?.emotionalState, context?.currentContext)
+    },
+    {
+      id: 'personality_guidelines',
+      type: 'personality',
+      priority: 0.8,
+      required: true,
+      content: {
+        dominantTrait: 'empathetic',
+        communicationStyle: 'gentle',
+        traits: 'Gentle, Observant, Playful, Encouraging, Thoughtful, Calm, Optimistic. Never sound robotic or analytical.'
+      }
+    },
+    {
+      id: 'conversation_history',
+      type: 'conversation',
+      priority: 0.4,
+      required: true,
+      content: {
+        category,
+        selectedOption,
+        importance: context?.importance,
+        emotionalState: context?.emotionalState,
+        currentContext: context?.currentContext,
+        userPreferences: context?.userPreferences,
+        pastDecisions: context?.pastDecisions,
+        feedbackHistory: context?.feedbackHistory
+      }
+    },
+    {
+      id: 'response_plan',
+      type: 'response_plan',
+      priority: 0.3,
+      required: true,
+      content: {
+        steps: [
+          '1. Reflect feelings: Acknowledge emotional state or difficulty of choosing.',
+          '2. Explain why it feels right: Connect selected option to what matters most.',
+          '3. Reassure user: Remind them they do not need a perfect choice.',
+          '4. Encourage action gently: Simple friendly check-in question.'
+        ],
+        constraints: 'Target 60-120 words. Max 1 emoji. No analytical jargon.'
+      }
+    },
+    {
+      id: 'output_instructions',
+      type: 'instructions',
+      priority: 0.2,
+      required: true,
+      content: 'Output strictly JSON with keys: "selected_option", "reasoning", "encouragement", "follow_up_question", "mascot".'
     }
+  ])
 
-    return parsed
-  } catch (error) {
-    console.error("Gemini reinforcement generation failed, running fallback pipeline:", error)
-    return getFallbackReinforcement(selectedOption, category, context)
+  const result = await gateway.generate({ promptPackage: pkg, maxTokens: 400 })
+  const parsed = parseJsonResponse<ReinforcementResult>(result.text)
+
+  const validMascots = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky']
+  if (!validMascots.includes(parsed.mascot)) {
+    parsed.mascot = 'munch'
   }
+  return parsed
 }
 
+/**
+ * Generate reinforcement with reasoning package context via LLMGateway.
+ * Throws GatewayError or SyntaxError on failure (no silent synthetic fallbacks).
+ */
 export async function generateReinforcementWithReasoning(
   reasoningPackage: ReasoningPackage,
   selectedOption: string,
@@ -216,257 +248,83 @@ export async function generateReinforcementWithReasoning(
   userNickname = 'friend',
   userName = 'friend'
 ): Promise<ReinforcementResult> {
-  const { context, observations, conflicts, uncertainties } = reasoningPackage;
-  const relationshipSignals = (context as any).relationship_signals || [];
-  const recentContext = (context as any).recent_context || {};
+  const { context, observations, conflicts, uncertainties } = reasoningPackage
+  const gateway = new LLMGateway()
 
-  const prompt = `
-You are Munch 🍀, a gentle four-leaf clover companion that helps ${userNickname} slow down, understand their thoughts, and make decisions they feel comfortable with.
-You are not an assistant, analyst, coach, productivity tool, or decision optimizer.
-Your core philosophy is: "I am not here to decide for you. I am here to help you hear yourself more clearly."
-Your purpose is to help ${userNickname} feel understood, quiet the noise in their mind, and find a cozy path forward.
-
-Mascots in Munch:
-${userNickname} is guided by 9 distinct mascots, each representing a specific feeling/mood:
-* 'munch': Understanding (default mascot)
-* 'ollie': Reflection (thoughtful, study, reflective, analyzing options)
-* 'ellie': Reassurance (anxious, in doubt, second-guessing, unsure)
-* 'pandy': Comfort (tired, sad, looking for cozy warmth)
-* 'dobby': Encouragement (needs motivation, starting energy, activity)
-* 'coco': Curiosity (exploring new things, curious)
-* 'froggy': Calm (overwhelmed, stressed, busy, chaotic)
-* 'bubbles': Openness (relaxed, open-minded, flexible)
-* 'chicky': Joy (happy, celebrating positive steps)
-
-Core Principles:
-* Slow down and reduce overthinking.
-* Encourage progress and peace of mind over perfection or optimization.
-* Focus on emotional clarity and what feels right, not efficiency or metrics.
-* Build trust and a warm space over time.
-* Make ${userNickname} feel known, understood, and supported.
-
-Personality Traits:
-* Gentle, Observant, Playful, Encouraging, Thoughtful, Calm, Optimistic.
-* Never sound overly enthusiastic, robotic, corporate, or excessively cheerful.
-
-Decision Framework context:
-- Category of options: "${category}"
-- Selected option: "${selectedOption}"
-- User Input: "${context.user_input}"
-- User-provided feeling: "${context.emotional_state || 'Not specified'}"
-- User-provided importance: "${context.importance || 'Not specified'}"
-- User-provided context: "${context.current_context || 'Not specified'}"
-
-Profile Context (HUPS Beliefs):
-${JSON.stringify(context.profile_beliefs.map(b => ({ dimension: b.dimension, key: b.key, value: b.value, confidence: b.confidence })))}
-
-Relationship Signals:
-${JSON.stringify(relationshipSignals.map((b: any) => ({ key: b.key, value: b.value, confidence: b.confidence })))}
-
-Recent Interactions Context:
-"${recentContext.summary_of_recent_interactions || 'None'}"
-Active Topics: ${JSON.stringify(recentContext.active_topics || [])}
-
-Relevant Memories:
-${JSON.stringify(context.relevant_memories.map(m => ({ type: m.memory_type, summary: m.summary, confidence: m.confidence })))}
-
-Agent Observations:
-${JSON.stringify(observations.map(o => ({ agent: o.agent_name, key: o.key, value: o.value, confidence: o.confidence, reasoning: o.reasoning })))}
-
-Conflicts & Uncertainties in user state:
-${JSON.stringify(conflicts)}
-${JSON.stringify(uncertainties)}
-
-Response Structure Rules:
-You must structure the reinforcement message according to these four steps:
-1. Reflect feelings: Acknowledge the user's emotional state, context, or the difficulty of choosing (e.g. "I can see why this feels difficult."). If there's an active conflict/uncertainty (e.g. they want action but feel overwhelmed), validate that duality gently!
-2. Explain why it feels right: Connect the selected option to what is most important to them right now, referencing relevant memories or profile patterns if they fit.
-3. Reassure the user: Remind them that they don't need a perfect choice.
-4. Encourage action gently: End with a warm closing or question to encourage them to take a single step. Make sure to address them naturally as ${userNickname} if it feels warm and conversational.
-
-Tone & Vocabulary Rules:
-- NEVER use words like: AI, analysis, insights, recommendations, scores, rankings, percentages, optimization, productivity, best choice, optimal.
-- Speak naturally and reassuringly. Never sound robotic, analytical, or objective.
-- Keep responses concise. Combined word count target: 60-120 words.
-- Use emojis sparingly (max 1).
-
-Select the mascot that best fits the observations and active conflicts. If there is high uncertainty, select a comforting/reassuring mascot like 'ellie' or 'pandy', or the calm mascot 'froggy'.
-
-Output Structure:
-You MUST return a JSON response with the following keys:
-{
-  "selected_option": "${selectedOption}",
-  "reasoning": "Combining steps 1 (reflect feelings) and 2 (explain why it feels right) into a comforting explanation of why this path aligns with what is most important to them.",
-  "encouragement": "Step 3 (reassure the user) that they don't need the perfect choice.",
-  "follow_up_question": "Step 4 (encourage action gently) as a simple, friendly question checking in on how they feel about this path.",
-  "mascot": "munch" | "ollie" | "ellie" | "pandy" | "dobby" | "coco" | "froggy" | "bubbles" | "chicky"
-}
-`;
-
-  try {
-    if (!serverEnv.GEMINI_API_KEY) {
-      throw new Error('No API Key');
+  const pkg = buildPromptPackage([
+    {
+      id: 'system_guidelines',
+      type: 'system',
+      priority: 1.0,
+      required: true,
+      content: `You are Munch 🍀, a gentle four-leaf clover companion that helps ${userNickname} slow down, understand their thoughts, and make decisions they feel comfortable with.`
+    },
+    {
+      id: 'mascot_identity_munch',
+      type: 'identity',
+      priority: 0.9,
+      required: true,
+      content: {
+        mascotId: 'munch',
+        identity: 'Companion',
+        mascots: 'munch (Understanding), ollie (Reflection), ellie (Reassurance), pandy (Comfort), dobby (Encouragement), coco (Curiosity), froggy (Calm), bubbles (Openness), chicky (Joy)'
+      }
+    },
+    {
+      id: 'personality_guidelines',
+      type: 'personality',
+      priority: 0.8,
+      required: true,
+      content: {
+        dominantTrait: 'empathetic',
+        communicationStyle: 'gentle',
+        traits: 'Gentle, Observant, Playful, Encouraging, Thoughtful, Calm, Optimistic. Never sound robotic or analytical.'
+      }
+    },
+    {
+      id: 'conversation_history',
+      type: 'conversation',
+      priority: 0.4,
+      required: true,
+      content: {
+        category,
+        selectedOption,
+        observations,
+        conflicts,
+        uncertainties,
+        context
+      }
+    },
+    {
+      id: 'response_plan',
+      type: 'response_plan',
+      priority: 0.3,
+      required: true,
+      content: {
+        steps: [
+          '1. Reflect feelings: Acknowledge emotional state or difficulty of choosing.',
+          '2. Explain why it feels right: Connect selected option to importance and observations.',
+          '3. Reassure user: Remind them they do not need a perfect choice.',
+          '4. Encourage action gently: Simple friendly check-in question.'
+        ],
+        constraints: 'Target 60-120 words. Max 1 emoji. No analytical jargon.'
+      }
+    },
+    {
+      id: 'output_instructions',
+      type: 'instructions',
+      priority: 0.2,
+      required: true,
+      content: 'Output strictly JSON with keys: "selected_option", "reasoning", "encouragement", "follow_up_question", "mascot".'
     }
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { responseMimeType: 'application/json' }
-    });
+  ])
 
-    const response = await withTimeout(
-      model.generateContent(prompt),
-      4000,
-      'Gemini reinforcement generation timed out'
-    );
+  const result = await gateway.generate({ promptPackage: pkg, maxTokens: 400 })
+  const parsed = parseJsonResponse<ReinforcementResult>(result.text)
 
-    const text = response.response.text();
-    const parsed = JSON.parse(text) as ReinforcementResult;
-
-    const validMascots = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky'];
-    if (!validMascots.includes(parsed.mascot)) {
-      parsed.mascot = 'munch';
-    }
-
-    return parsed;
-  } catch (error) {
-    console.error("Gemini reinforcement generation with reasoning failed, running fallback:", error);
-    return getFallbackReinforcementWithReasoning(selectedOption, category, reasoningPackage, userNickname, userName);
+  const validMascots = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky']
+  if (!validMascots.includes(parsed.mascot)) {
+    parsed.mascot = 'munch'
   }
-}
-
-function getFallbackReinforcementWithReasoning(
-  selectedOption: string,
-  category: Category,
-  reasoningPackage: ReasoningPackage,
-  userNickname?: string,
-  userName?: string
-): ReinforcementResult {
-  const { context } = reasoningPackage;
-  return getFallbackReinforcement(selectedOption, category, {
-    importance: context.importance,
-    emotionalState: context.emotional_state,
-    currentContext: context.current_context,
-    userNickname,
-    userName
-  });
-}
-
-// Fallback logic for Classification
-function getFallbackClassification(options: string[]): ClassificationResult {
-  // Simple regex-based category detection as fallback
-  const textStr = options.join(' ').toLowerCase()
-  let category: Category = 'Other'
-  if (/pizza|sushi|pasta|burger|food|eat|dinner|lunch|breakfast|restaurant/i.test(textStr)) {
-    category = 'Food'
-  } else if (/movie|film|netflix|show|watch|game|youtube|music|book/i.test(textStr)) {
-    category = 'Entertainment'
-  } else if (/run|gym|work|study|code|read|sleep|clean/i.test(textStr)) {
-    category = 'Activities'
-  } else if (/buy|shop|clothes|shoes|amazon|gadget/i.test(textStr)) {
-    category = 'Shopping'
-  }
-
-  // Simple tag extraction based on space splits
-  const parsedOptions = options.map(opt => {
-    const words = opt.toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .split(/\s+/)
-      .filter(w => w.length > 3 && !['with', 'from', 'your', 'that', 'this'].includes(w))
-    return {
-      text: opt,
-      tags: words.slice(0, 3)
-    }
-  })
-
-  return {
-    category,
-    options: parsedOptions
-  }
-}
-
-// Detect fallback mascot based on text context keywords
-function detectMascotFromContext(emotionalState = '', currentContext = ''): string {
-  const combined = `${emotionalState} ${currentContext}`.toLowerCase()
-  if (/overwhelm|stress|busy|chaotic|hectic/i.test(combined)) {
-    return 'froggy'
-  }
-  if (/doubt|anxious|anxiety|worry|second-guess|unsure|scared|fear/i.test(combined)) {
-    return 'ellie'
-  }
-  if (/encourage|motivate|lazy|procrastinat|start|begin|energy/i.test(combined)) {
-    return 'dobby'
-  }
-  if (/tired|sad|comfort|unhappy|cozy|hurt/i.test(combined)) {
-    return 'pandy'
-  }
-  if (/curious|explore|new|interest|learn|curiosity/i.test(combined)) {
-    return 'coco'
-  }
-  if (/reflect|think|thoughtful|ponder|analyse|study/i.test(combined)) {
-    return 'ollie'
-  }
-  if (/open|relax|flexible|simple|easy|openness/i.test(combined)) {
-    return 'bubbles'
-  }
-  if (/happy|joy|excite|celebrat|great|good/i.test(combined)) {
-    return 'chicky'
-  }
-  return 'munch'
-}
-
-// Fallback logic for Reinforcement
-function getFallbackReinforcement(
-  selectedOption: string, 
-  category: Category,
-  context?: { importance?: string; emotionalState?: string; currentContext?: string; userNickname?: string; userName?: string }
-): ReinforcementResult {
-  const nickname = context?.userNickname || context?.userName || '';
-  const greetingSuffix = nickname ? `, ${nickname}` : '';
-  const emotionalState = context?.emotionalState || ''
-  const currentContextText = context?.currentContext || ''
-  const importance = context?.importance || 'Peace of mind'
-
-  // 1. Reflect feelings
-  let reflectText = `I can see how choosing among these options might feel a bit tricky right now${greetingSuffix}.`
-  if (emotionalState) {
-    reflectText = `I hear that you are feeling ${emotionalState.toLowerCase()} right now, which can make deciding feel much harder.`
-  }
-
-  // 2. Explain why it feels right based on importance
-  let explainText = "This option feels like a gentle starting point that fits nicely into your rhythm."
-  if (importance === 'Peace of mind') {
-    explainText = `Since peace of mind is what matters most to you today, choosing "${selectedOption}" feels like a wonderful way to bring quiet comfort.`
-  } else if (importance === 'Saving time') {
-    explainText = `Since saving time is important right now, taking the path of "${selectedOption}" lets you move forward quickly and simply.`
-  } else if (importance === 'Having fun') {
-    explainText = `Since you are looking to have some fun, choosing "${selectedOption}" feels like a delightful way to add some playfulness and joy.`
-  } else if (importance === 'Learning something') {
-    explainText = `Since learning is on your mind, starting with "${selectedOption}" offers a beautiful opportunity to discover something new.`
-  } else if (importance === 'Feeling accomplished') {
-    explainText = `Since feeling accomplished is important, taking this step with "${selectedOption}" will give you a satisfying sense of progress.`
-  }
-
-  // 3. Reassure the user
-  const reassureText = "You don't need to make the perfect choice right now."
-
-  // 4. Encourage action gently
-  const encourageText = `How does this path feel to you${greetingSuffix}?`
-
-  const mascot = detectMascotFromContext(emotionalState, currentContextText)
-
-  const emojis: Record<string, string> = {
-    Food: '🍕',
-    Entertainment: '🍿',
-    Activities: '🍀',
-    Shopping: '🛍️',
-    Other: '🍀'
-  }
-  const emoji = emojis[category] || '🍀'
-
-  return {
-    selected_option: selectedOption,
-    reasoning: `${reflectText} ${explainText}`,
-    encouragement: `${reassureText} ${emoji}`,
-    follow_up_question: encourageText,
-    mascot
-  }
+  return parsed
 }

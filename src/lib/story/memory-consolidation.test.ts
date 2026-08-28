@@ -507,7 +507,7 @@ describe('MemoryConsolidationEngine tests', () => {
     const refEngine = new ReflectionEngine();
     const finalTrace = await refEngine.execute(trace, context);
 
-    const commitmentReflection = finalTrace.reflections.find(r => r.reflection.includes("stayed committed"));
+    const commitmentReflection = finalTrace.reflections.find(r => r.reflection.includes("reinforced commitment to goal"));
     expect(commitmentReflection).toBeDefined();
     expect(commitmentReflection?.observation).toContain('goal');
   });

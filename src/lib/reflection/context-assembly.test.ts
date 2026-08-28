@@ -5,7 +5,8 @@ import {
   estimateTokens,
   compareSemanticItems,
   checkBlockSemanticOverlap,
-  mergeBlocks
+  mergeBlocks,
+  sanitizeChatHistory
 } from './context-assembly';
 import { CognitiveTrace, ContextPackage } from './types';
 import { resolveInvalidatedEngines, generateFingerprints, PIPELINE_VERSION } from './speculative';
@@ -234,5 +235,140 @@ describe('Context Assembly Engine Tests', () => {
     expect(normMatches.has('Mascot Specialist')).toBe(true);
 
     expect(PIPELINE_VERSION).toBe('v1.8.0');
+  });
+
+  describe('Conversation Context Contract Tests (Phase 5.1 Task 1)', () => {
+    it('A. should consume context.chatHistory in ContextAssemblyEngine', async () => {
+      const trace = getBaseTrace();
+      const context = getBaseContext();
+      context.chatHistory = [
+        { id: '1', sender: 'user', content: 'Turn 1 user', created_at: '2026-08-28T00:00:00Z' },
+        { id: '2', sender: 'mascot', content: 'Turn 1 mascot', mascot_character: 'munch', created_at: '2026-08-28T00:01:00Z' }
+      ];
+
+      const result = await engine.execute(trace, context);
+      const conversationBlock = result.contextAssembly?.blocks.find(b => b.category === 'conversation');
+      const content = conversationBlock?.content as any;
+
+      expect(conversationBlock).toBeDefined();
+      expect(content?.recentHistory).toBeDefined();
+      expect(content?.recentHistory.length).toBe(2);
+      expect(content?.recentHistory[0]).toEqual({ role: 'user', content: 'Turn 1 user' });
+      expect(content?.recentHistory[1]).toEqual({ role: 'assistant', content: 'Turn 1 mascot', mascotId: 'munch' });
+    });
+
+    it('B. should include up to 6 previous messages when more than 6 exist', () => {
+      const history = Array.from({ length: 10 }, (_, i) => ({
+        id: `msg-${i}`,
+        sender: i % 2 === 0 ? 'user' : 'mascot',
+        content: `Message ${i}`,
+        mascot_character: i % 2 !== 0 ? 'munch' : undefined
+      }));
+
+      const turns = sanitizeChatHistory(history, 'Active current input');
+      expect(turns.length).toBe(6);
+      expect(turns[0].content).toBe('Message 4');
+      expect(turns[5].content).toBe('Message 9');
+    });
+
+    it('C. should preserve chronological order from oldest to newest', () => {
+      const history = [
+        { sender: 'user', content: 'First' },
+        { sender: 'mascot', content: 'Second', mascot_character: 'munch' },
+        { sender: 'user', content: 'Third' },
+        { sender: 'mascot', content: 'Fourth', mascot_character: 'munch' }
+      ];
+
+      const turns = sanitizeChatHistory(history, 'Current question');
+      expect(turns.map(t => t.content)).toEqual(['First', 'Second', 'Third', 'Fourth']);
+    });
+
+    it('D. should exclude the current user message if present at the end of chatHistory', () => {
+      const history = [
+        { sender: 'user', content: 'First question' },
+        { sender: 'mascot', content: 'First answer', mascot_character: 'munch' },
+        { sender: 'user', content: 'Current active question' }
+      ];
+
+      const turns = sanitizeChatHistory(history, 'Current active question');
+      expect(turns.length).toBe(2);
+      expect(turns.map(t => t.content)).toEqual(['First question', 'First answer']);
+      expect(turns.some(t => t.content === 'Current active question')).toBe(false);
+    });
+
+    it('E. should strip internal metadata, database IDs, timestamps, and traces', () => {
+      const history = [
+        {
+          id: 'uuid-1234',
+          chat_id: 'chat-5678',
+          user_id: 'user-9999',
+          sender: 'mascot',
+          content: 'Clean content',
+          mascot_character: 'ollie',
+          mascot_expression: 'thinking',
+          nlu_metadata: { cognitiveTrace: { readinessScore: 0.9 } },
+          created_at: '2026-08-28T12:00:00Z',
+          updated_at: '2026-08-28T12:00:00Z'
+        }
+      ];
+
+      const turns = sanitizeChatHistory(history, 'Hello');
+      expect(turns.length).toBe(1);
+      expect(turns[0]).toEqual({
+        role: 'assistant',
+        content: 'Clean content',
+        mascotId: 'ollie'
+      });
+      expect((turns[0] as any).id).toBeUndefined();
+      expect((turns[0] as any).created_at).toBeUndefined();
+      expect((turns[0] as any).nlu_metadata).toBeUndefined();
+      expect((turns[0] as any).mascot_expression).toBeUndefined();
+    });
+
+    it('F. should trim oldest message pairs when exceeding 400 tokens budget', () => {
+      // Create a set of long messages that exceed 400 tokens (approx 1600 characters)
+      const longText = 'This is a lengthy paragraph providing verbose context and discussion for the mascot dialogue. '.repeat(10);
+      const history = [
+        { sender: 'user', content: `Old pair user: ${longText}` },
+        { sender: 'mascot', content: `Old pair mascot: ${longText}` },
+        { sender: 'user', content: 'Newest user turn: Need quick help with physics' },
+        { sender: 'mascot', content: 'Newest mascot turn: I am right here with you' }
+      ];
+
+      const turns = sanitizeChatHistory(history, 'Active prompt');
+      // The oldest pair should be trimmed to stay under 400 tokens, keeping newest turns
+      expect(turns.length).toBeLessThan(history.length);
+      expect(turns.some(t => t.content.includes('Newest user turn'))).toBe(true);
+      expect(turns.some(t => t.content.includes('Newest mascot turn'))).toBe(true);
+      expect(estimateTokens(JSON.stringify(turns))).toBeLessThanOrEqual(400);
+    });
+
+    it('G. should keep context behavior unchanged when chatHistory is empty or undefined', async () => {
+      const trace = getBaseTrace();
+      const context = getBaseContext();
+      context.chatHistory = undefined;
+
+      const result = await engine.execute(trace, context);
+      const conversationBlock = result.contextAssembly?.blocks.find(b => b.category === 'conversation');
+      const content = conversationBlock?.content as any;
+
+      expect(conversationBlock).toBeDefined();
+      expect(content?.userInput).toBe(context.user_input);
+      expect(content?.recentHistory).toBeUndefined();
+    });
+
+    it('H. should execute deterministically without any LLM network calls', () => {
+      const history = [
+        { sender: 'user', content: 'Turn 1' },
+        { sender: 'mascot', content: 'Turn 1 reply' }
+      ];
+
+      const start = Date.now();
+      const turns = sanitizeChatHistory(history, 'Turn 2');
+      const duration = Date.now() - start;
+
+      expect(turns.length).toBe(2);
+      expect(duration).toBeLessThan(50); // Instant synchronous execution
+    });
   });
 });

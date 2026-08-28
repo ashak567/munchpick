@@ -8,6 +8,7 @@ import { runSharedPipeline } from '../orchestrator/agents';
 import { AgentObservation, ReasoningPackage } from '../orchestrator/types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
+import { llmConfig } from '@/lib/llm/config';
 
 const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY || 'MOCK_KEY');
 
@@ -53,7 +54,7 @@ export async function analyzeTopics(userInput: string, currentContext = ''): Pro
   }
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
@@ -125,11 +126,12 @@ export class MunchContextBuilder {
     importance?: string;
     emotional_state?: string;
     current_context?: string;
+    topic_analysis?: TopicAnalysis;
   }): Promise<ContextPackage> {
     const supabase = await createClient();
 
     // 1. Topic Analysis
-    const analysis = await analyzeTopics(params.user_input, params.current_context);
+    const analysis = params.topic_analysis || await analyzeTopics(params.user_input, params.current_context);
     const activeTopics = analysis.active_topics;
 
     // 2. Fetch beliefs (HUPS)
@@ -300,6 +302,7 @@ export class MunchContextBuilder {
     importance?: string;
     emotional_state?: string;
     current_context?: string;
+    topic_analysis?: TopicAnalysis;
   }): Promise<ReasoningPackage> {
     // 1. Build refined context package
     const context = await this.buildContext(params);

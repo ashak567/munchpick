@@ -274,6 +274,30 @@ describe('Munch Context Builder Tests', () => {
       expect(context.relevant_decisions[0].rating).toBe('love');
       expect(context.recent_context.summary_of_recent_interactions).toContain('Sushi');
     });
+
+    it('should reuse precomputed topic_analysis and NOT call LLM when topic_analysis is provided', async () => {
+      const builder = new MunchContextBuilder();
+      mockGenerateContent.mockClear();
+
+      const precomputedAnalysis = {
+        active_topics: ['custom_topic_1', 'custom_topic_2'],
+        intent_hints: ['custom_intent_hint']
+      };
+
+      const context = await builder.buildContext({
+        user_id: 'user_123',
+        user_input: 'Some input text',
+        options: ['Opt A', 'Opt B'],
+        topic_analysis: precomputedAnalysis
+      });
+
+      // Gemini generateContent should NOT have been called because topic_analysis was provided
+      expect(mockGenerateContent).not.toHaveBeenCalled();
+
+      // The returned context should contain the precomputed topics and intent hints
+      expect(context.recent_context.active_topics).toEqual(['custom_topic_1', 'custom_topic_2']);
+      expect(context.recent_context.intent_hints).toEqual(['custom_intent_hint']);
+    });
   });
 
   describe('Full Builder Orchestration Pass', () => {

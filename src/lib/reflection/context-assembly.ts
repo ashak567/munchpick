@@ -234,6 +234,79 @@ function mergeArraysAndDeduplicate(arr1: any[], arr2: any[]): any[] {
 }
 
 /**
+ * Clean, minimal dialogue turn representation for narrator context.
+ */
+export interface SanitizedDialogueTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  mascotId?: string;
+}
+
+/**
+ * Sanitizes and bounds historical chat messages for context assembly.
+ * - Extracts up to 6 most recent messages excluding the current user turn.
+ * - Preserves chronological order.
+ * - Strips IDs, timestamps, nlu_metadata, cognitive traces.
+ * - Enforces max 400 token budget by trimming oldest message pairs first.
+ */
+export function sanitizeChatHistory(
+  chatHistory: any[] | undefined,
+  currentInput: string | undefined
+): SanitizedDialogueTurn[] {
+  if (!Array.isArray(chatHistory) || chatHistory.length === 0) {
+    return [];
+  }
+
+  // Clone to avoid mutating external context
+  let messages = [...chatHistory];
+
+  // Exclude trailing current user message if already present in history array
+  if (messages.length > 0) {
+    const last = messages[messages.length - 1];
+    const isUser = last.sender === 'user' || last.role === 'user';
+    const lastContent = typeof last.content === 'string' ? last.content.trim() : '';
+    const currentTrimmed = (currentInput || '').trim();
+    if (isUser && lastContent === currentTrimmed) {
+      messages.pop();
+    }
+  }
+
+  // Keep up to 6 most recent historical messages
+  if (messages.length > 6) {
+    messages = messages.slice(-6);
+  }
+
+  // Map to clean SanitizedDialogueTurn format, stripping all internal metadata, IDs, timestamps
+  const turns: SanitizedDialogueTurn[] = messages.map(msg => {
+    const isUser = msg.sender === 'user' || msg.role === 'user';
+    const role: 'user' | 'assistant' = isUser ? 'user' : 'assistant';
+    const content = typeof msg.content === 'string' ? msg.content.trim() : String(msg.content || '').trim();
+    const mascotId = !isUser ? (msg.mascot_character || msg.mascotId || msg.mascot || undefined) : undefined;
+
+    const turn: SanitizedDialogueTurn = { role, content };
+    if (mascotId) {
+      turn.mascotId = mascotId;
+    }
+    return turn;
+  });
+
+  // Token budget: maximum 400 tokens reserved for recent conversation history.
+  // If history exceeds 400 tokens:
+  // - remove the oldest message pair first
+  // - continue until within budget
+  // - preserve the newest conversational context
+  while (turns.length > 0 && estimateTokens(JSON.stringify(turns)) > 400) {
+    if (turns.length >= 2) {
+      turns.splice(0, 2);
+    } else {
+      turns.shift();
+    }
+  }
+
+  return turns;
+}
+
+/**
  * Context Assembly Engine.
  * Gathers, normalizes, deduplicates, prioritizes, and trims cognitive states.
  */
@@ -372,7 +445,9 @@ export class ContextAssemblyEngine implements CognitiveEngine {
       });
     }
 
-    // 8. Gather Conversation Metadata (conversation) - Avoid conversation dumping!
+    // 8. Gather Conversation Metadata & History (conversation) - Avoid conversation dumping!
+    const recentHistory = sanitizeChatHistory(context.chatHistory, context.user_input);
+
     const conversationContent: Record<string, any> = {
       userInput: context.user_input,
       activeTopicKey: trace.activeTopicKey,
@@ -381,6 +456,9 @@ export class ContextAssemblyEngine implements CognitiveEngine {
       readinessThreshold: trace.readinessThreshold,
       generatedPaths: trace.generatedPaths || []
     };
+    if (recentHistory.length > 0) {
+      conversationContent.recentHistory = recentHistory;
+    }
     if (context.recent_context) {
       conversationContent.recentContext = context.recent_context;
     }

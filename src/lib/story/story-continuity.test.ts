@@ -463,7 +463,7 @@ describe('StoryProgressEngine tests', () => {
     const refEngine = new ReflectionEngine();
     const finalTrace = await refEngine.execute(trace, context);
 
-    const stagnationReflection = finalTrace.reflections.find(r => r.reflection.includes("circling around"));
+    const stagnationReflection = finalTrace.reflections.find(r => r.reflection.includes("stagnation"));
     expect(stagnationReflection).toBeDefined();
     expect(stagnationReflection?.observation).toContain('stagnating');
   });
