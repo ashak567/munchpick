@@ -1,6 +1,8 @@
 import { LLMProvider, ProviderCapabilities, GatewayHealth } from './types';
 import { GeminiProviderAdapter } from './providers/gemini';
 import { AnthropicProviderAdapter } from './providers/anthropic';
+import { GroqProviderAdapter } from './providers/groq';
+import { OpenRouterProviderAdapter } from './providers/openrouter';
 import { llmConfig } from './config';
 
 export class ProviderResolver {
@@ -10,6 +12,8 @@ export class ProviderResolver {
     // Register available provider adapters
     this.registerProvider(new GeminiProviderAdapter());
     this.registerProvider(new AnthropicProviderAdapter());
+    this.registerProvider(new GroqProviderAdapter());
+    this.registerProvider(new OpenRouterProviderAdapter());
   }
 
   public registerProvider(provider: LLMProvider): void {
@@ -41,5 +45,32 @@ export class ProviderResolver {
     }
 
     return provider;
+  }
+
+  /** Resolve the primary provider plus configured fallbacks for transient failures. */
+  public resolveCandidates(
+    capabilities: ProviderCapabilities,
+    healthRegistry: Map<string, GatewayHealth>,
+    targetProviderId?: string
+  ): LLMProvider[] {
+    // An explicit provider request is intentional and must not silently route elsewhere.
+    if (targetProviderId) {
+      return [this.resolve(capabilities, healthRegistry, targetProviderId)];
+    }
+
+    const providerIds = [llmConfig.defaultProvider, ...llmConfig.fallbackProviders]
+      .map(id => id.toLowerCase())
+      .filter((id, index, all) => all.indexOf(id) === index);
+
+    const providers = providerIds
+      .map(id => this.providers.get(id))
+      .filter((provider): provider is LLMProvider => Boolean(provider))
+      .filter(provider => provider.validateCapabilities(capabilities));
+
+    if (providers.length === 0) {
+      throw new Error('LLM Provider Resolver: No configured provider supports this request.');
+    }
+
+    return providers;
   }
 }

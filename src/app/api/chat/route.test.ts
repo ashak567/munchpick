@@ -56,8 +56,44 @@ vi.mock('@/lib/context/builder', () => {
   };
 });
 
+function getValidPromptPackage(currentMessage: string) {
+  return {
+    version: 'v1.7.0',
+    templateVersion: 'v1.0.0',
+    sections: [
+      { id: 'system_guidelines', type: 'system', priority: 1, required: true, content: 'System' },
+      { id: 'mascot_identity_munch', type: 'identity', priority: 0.9, required: true, content: { mascotId: 'munch' } },
+      { id: 'personality_guidelines', type: 'personality', priority: 0.8, required: true, content: { dominantTrait: 'calm' } },
+      { id: 'current_user_message', type: 'conversation', priority: 0.4, required: true, content: currentMessage },
+      { id: 'response_plan', type: 'response_plan', priority: 0.3, required: true, content: { responseGoal: 'reflect' } },
+      { id: 'output_instructions', type: 'instructions', priority: 0.2, required: true, content: 'Respond directly.' }
+    ],
+    estimatedTokens: 30,
+    providerHints: { supportsStreaming: true, supportsVision: false, supportsReasoning: false },
+    checksum: 'test-checksum',
+    directives: { mustDo: [], shouldDo: [], avoid: [] },
+    statistics: { sections: 6, estimatedTokens: 30, checksum: 'test-checksum', compressionRatio: 1 },
+    renderStrategy: 'conversation'
+  } as any;
+}
+
+function getMockGatewayResponse(text: string) {
+  return {
+    requestId: 'test-request-id',
+    text,
+    streamed: false,
+    metrics: {
+      providerId: 'gemini', modelId: 'gemini-1.5-flash', finishReason: 'stop',
+      promptTokens: 10, completionTokens: 10, totalTokens: 20, latency: 1,
+      retries: 0, timeoutMs: 5000, gatewayVersion: 'v1.0.0'
+    }
+  } as any;
+}
+
 describe('Chat API Route Handler - FR-009 Failure Tests', () => {
   const originalApiKey = serverEnv.GEMINI_API_KEY;
+  const originalGroqKey = serverEnv.GROQ_API_KEY;
+  const originalOpenRouterKey = serverEnv.OPENROUTER_API_KEY;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -84,11 +120,15 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
 
   afterEach(() => {
     serverEnv.GEMINI_API_KEY = originalApiKey;
+    serverEnv.GROQ_API_KEY = originalGroqKey;
+    serverEnv.OPENROUTER_API_KEY = originalOpenRouterKey;
     vi.restoreAllMocks();
   });
 
   it('should return 500 when Gemini API key is missing or set to MOCK_KEY', async () => {
     serverEnv.GEMINI_API_KEY = 'MOCK_KEY';
+    serverEnv.GROQ_API_KEY = 'MOCK_KEY';
+    serverEnv.OPENROUTER_API_KEY = 'MOCK_KEY';
 
     // Mock Supabase Auth and DB queries
     const mockSupabase = {
@@ -341,6 +381,77 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
         topic_analysis: expectedTopicAnalysis
       })
     );
+  });
+
+  it('passes the persisted previous assistant response into the current turn history', async () => {
+    const priorUserMessage = 'I am stressed about exams.';
+    const priorAssistantResponse = 'That sounds heavy. Which subject is taking the most energy right now?';
+    const currentUserMessage = 'Math is especially hard.';
+    const capturedHistories: any[][] = [];
+
+    vi.spyOn(engineModule, 'runCognitivePipeline').mockImplementation(async (_pipeline, trace, context) => {
+      capturedHistories.push(context.chatHistory || []);
+      return {
+        ...trace,
+        state: 'Exploring',
+        promptPackage: getValidPromptPackage(currentUserMessage)
+      } as any;
+    });
+
+    const mockSupabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'mock-user-id' } }, error: null })
+      },
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'chats') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } },
+              error: null
+            }),
+            update: vi.fn().mockReturnThis()
+          };
+        }
+        if (table === 'chat_messages') {
+          return {
+            insert: vi.fn().mockReturnThis(),
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { id: 'persisted-message' }, error: null }),
+            eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
+              // The database query is newest first; the route must restore chronological order.
+              data: [
+                { sender: 'user', content: currentUserMessage },
+                { sender: 'mascot', content: priorAssistantResponse, mascot_character: 'munch' },
+                { sender: 'user', content: priorUserMessage }
+              ],
+              error: null
+            })
+          };
+        }
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: {}, error: null }) };
+      })
+    };
+
+    vi.mocked(createClient).mockResolvedValue(mockSupabase as any);
+    const { LLMGateway } = await import('@/lib/llm/gateway');
+    vi.spyOn(LLMGateway.prototype, 'generate').mockResolvedValue(getMockGatewayResponse('Math can feel especially difficult when each topic builds on the last.'));
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ content: currentUserMessage })
+    }));
+
+    expect(response.status).toBe(200);
+    expect(capturedHistories).toHaveLength(1);
+    expect(capturedHistories[0]).toEqual([
+      { sender: 'user', content: priorUserMessage },
+      { sender: 'mascot', content: priorAssistantResponse, mascot_character: 'munch' },
+      { sender: 'user', content: currentUserMessage }
+    ]);
   });
 
   it('should schedule conversation summary in after() when messageCount reaches 20 without altering 200 response', async () => {

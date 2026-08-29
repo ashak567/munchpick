@@ -11,6 +11,11 @@ export class AnthropicProviderAdapter implements LLMProvider {
     return true;
   }
 
+  public isConfigured(): boolean {
+    const apiKey = serverEnv?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+    return Boolean(apiKey && apiKey !== 'MOCK_KEY');
+  }
+
   public async generate(request: LLMRequest): Promise<LLMResponse> {
     const apiKey = serverEnv?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '';
     if (!apiKey || apiKey === 'MOCK_KEY') {

@@ -139,6 +139,26 @@ describe('Response Validator Engine Tests', () => {
     expect(result.issues.some(i => i.id === 'quality-duplicate-paragraph')).toBe(true);
   });
 
+  it('rejects a response that repeats a prior assistant reply or opening', () => {
+    const previous = "I've been following what you've shared, and I want to understand your situation before jumping to advice. How are you holding up?";
+    const repeated = validator.validate({
+      gatewayResponse: getMockGatewayResponse(previous),
+      promptPackage: getMockPromptPackage(),
+      previousAssistantResponses: [previous]
+    });
+    const repeatedOpening = validator.validate({
+      gatewayResponse: getMockGatewayResponse("I've been following what you've shared, and I want to understand your situation before jumping to advice. What changed today?"),
+      promptPackage: getMockPromptPackage(),
+      previousAssistantResponses: [previous]
+    });
+
+    expect(repeated.passed).toBe(false);
+    expect(repeated.issues.some(i => i.id === 'quality-repeat-assistant-response')).toBe(true);
+    expect(repeatedOpening.passed).toBe(false);
+    expect(repeatedOpening.issues.some(i => i.id === 'quality-repeat-assistant-opening')).toBe(true);
+    expect(validator.compileRetryHints(repeatedOpening.issues).avoidRepetition).toBe(true);
+  });
+
   it('should violate planning constraints if question limit is exceeded (high severity)', () => {
     const gatewayResponse = getMockGatewayResponse("How are you? Are you feeling okay? What can I do for you?");
     const input: ResponseValidatorInput = {
@@ -224,7 +244,8 @@ describe('Response Validator Engine Tests', () => {
         removeHumor: true,
         reduceQuestions: true,
         strengthenEmpathy: true,
-        improveFormatting: true
+        improveFormatting: true,
+        avoidRepetition: true
       }
     };
 
@@ -242,8 +263,10 @@ describe('Response Validator Engine Tests', () => {
     expect(directives?.mustDo).toContain('Keep output extremely brief (target 1 sentence, under 20 words).');
     expect(directives?.mustDo).toContain('Deliver extremely validating, supportive and comforting comments.');
     expect(directives?.mustDo).toContain('Strictly output correct and properly balanced markdown block syntax.');
+    expect(directives?.mustDo).toContain('Write a substantively new answer that directly addresses the CURRENT_USER_MESSAGE.');
     expect(directives?.avoid).toContain('Strictly avoid all jokes, humor, and lighthearted comments.');
     expect(directives?.avoid).toContain('Do not ask any questions.');
+    expect(directives?.avoid).toContain('Do not reuse an opening sentence, follow-up question, or response wording from RECENT_CONVERSATION_HISTORY.');
   });
 
   it('should play nicely with pipeline versions', () => {

@@ -23,6 +23,7 @@ export interface ProviderCapabilities {
 export interface LLMProvider {
   id: string;
   validateCapabilities(capabilities: ProviderCapabilities): boolean;
+  isConfigured?(): boolean;
   generate(request: LLMRequest): Promise<LLMResponse>;
   stream(request: LLMRequest): AsyncGenerator<string, void, unknown>;
 }

@@ -38,11 +38,16 @@ function getValidPromptPackage(): PromptPackage {
 class MockLLMProvider implements LLMProvider {
   constructor(
     public id: string,
-    private mockGenerate: (req: LLMRequest) => Promise<LLMResponse>
+    private mockGenerate: (req: LLMRequest) => Promise<LLMResponse>,
+    private configured: boolean = true
   ) {}
 
   public validateCapabilities(): boolean {
     return true;
+  }
+
+  public isConfigured(): boolean {
+    return this.configured;
   }
 
   public async generate(request: LLMRequest): Promise<LLMResponse> {
@@ -165,7 +170,140 @@ describe('LLM Gateway Engine Tests', () => {
     expect(response.metrics.retries).toBe(2);
   });
 
-  it('should fail fast without retries on non-retryable errors (auth errors)', async () => {
+  it('should use the next configured provider when the primary provider is unavailable (503)', async () => {
+    const originalDefaultProvider = llmConfig.defaultProvider;
+    const originalFallbackProviders = llmConfig.fallbackProviders;
+    llmConfig.defaultProvider = 'mock-primary';
+    llmConfig.fallbackProviders = ['mock-fallback'];
+    llmConfig.providers['mock-primary'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+    llmConfig.providers['mock-fallback'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+
+    try {
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('mock-primary', async () => {
+        throw new Error('503 Service Unavailable');
+      }));
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('mock-fallback', async () => ({
+        text: 'Fallback response',
+        finishReason: 'stop',
+        promptTokens: 8,
+        completionTokens: 3
+      })));
+
+      const response = await gateway.generate({ promptPackage: getValidPromptPackage() });
+      expect(response.text).toBe('Fallback response');
+      expect(response.metrics.providerId).toBe('mock-fallback');
+    } finally {
+      llmConfig.defaultProvider = originalDefaultProvider;
+      llmConfig.fallbackProviders = originalFallbackProviders;
+    }
+  });
+
+  it('should cascade through full fallback chain (Primary 429 -> Fallback1 429 -> Fallback2 200)', async () => {
+    const originalDefaultProvider = llmConfig.defaultProvider;
+    const originalFallbackProviders = llmConfig.fallbackProviders;
+    llmConfig.defaultProvider = 'chain-gemini';
+    llmConfig.fallbackProviders = ['chain-groq', 'chain-openrouter'];
+    llmConfig.providers['chain-gemini'] = { ...llmConfig.providers['mock-success'], model: 'gemini-2.5-flash', retryCount: 1 };
+    llmConfig.providers['chain-groq'] = { ...llmConfig.providers['mock-success'], model: 'llama-3.1-8b-instant', retryCount: 1 };
+    llmConfig.providers['chain-openrouter'] = { ...llmConfig.providers['mock-success'], model: 'openrouter/free', retryCount: 1 };
+
+    let geminiCalled = false;
+    let groqCalled = false;
+    let openrouterCalled = false;
+
+    try {
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('chain-gemini', async () => {
+        geminiCalled = true;
+        throw new Error('429 Rate limit exceeded');
+      }));
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('chain-groq', async () => {
+        groqCalled = true;
+        throw new Error('429 Too Many Requests');
+      }));
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('chain-openrouter', async () => {
+        openrouterCalled = true;
+        return {
+          text: 'OpenRouter resilient response',
+          finishReason: 'stop',
+          promptTokens: 12,
+          completionTokens: 6
+        };
+      }));
+
+      const response = await gateway.generate({ promptPackage: getValidPromptPackage() });
+      expect(geminiCalled).toBe(true);
+      expect(groqCalled).toBe(true);
+      expect(openrouterCalled).toBe(true);
+      expect(response.text).toBe('OpenRouter resilient response');
+      expect(response.metrics.providerId).toBe('chain-openrouter');
+      expect(response.metrics.modelId).toBe('openrouter/free');
+    } finally {
+      llmConfig.defaultProvider = originalDefaultProvider;
+      llmConfig.fallbackProviders = originalFallbackProviders;
+    }
+  });
+
+  it('should skip unconfigured providers with missing API keys and continue down the chain', async () => {
+    const originalDefaultProvider = llmConfig.defaultProvider;
+    const originalFallbackProviders = llmConfig.fallbackProviders;
+    llmConfig.defaultProvider = 'skip-gemini';
+    llmConfig.fallbackProviders = ['skip-groq-nokey', 'skip-openrouter'];
+    llmConfig.providers['skip-gemini'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+    llmConfig.providers['skip-groq-nokey'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+    llmConfig.providers['skip-openrouter'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+
+    let groqCalled = false;
+
+    try {
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('skip-gemini', async () => {
+        throw new Error('429 Rate limited');
+      }));
+      // Groq has no configured API credentials
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('skip-groq-nokey', async () => {
+        groqCalled = true;
+        throw new Error('Groq API key is missing or invalid (auth error).');
+      }, false));
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('skip-openrouter', async () => ({
+        text: 'Recovered via OpenRouter',
+        finishReason: 'stop',
+        promptTokens: 10,
+        completionTokens: 4
+      }), true));
+
+      const response = await gateway.generate({ promptPackage: getValidPromptPackage() });
+      expect(response.text).toBe('Recovered via OpenRouter');
+      expect(response.metrics.providerId).toBe('skip-openrouter');
+      expect(groqCalled).toBe(false); // Unconfigured provider was skipped without invocation
+    } finally {
+      llmConfig.defaultProvider = originalDefaultProvider;
+      llmConfig.fallbackProviders = originalFallbackProviders;
+    }
+  });
+
+  it('should throw typed GatewayError when all configured providers in chain fail', async () => {
+    const originalDefaultProvider = llmConfig.defaultProvider;
+    const originalFallbackProviders = llmConfig.fallbackProviders;
+    llmConfig.defaultProvider = 'all-fail-1';
+    llmConfig.fallbackProviders = ['all-fail-2'];
+    llmConfig.providers['all-fail-1'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+    llmConfig.providers['all-fail-2'] = { ...llmConfig.providers['mock-success'], retryCount: 1 };
+
+    try {
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('all-fail-1', async () => {
+        throw new Error('503 Service Unavailable');
+      }));
+      (gateway as any).resolver.registerProvider(new MockLLMProvider('all-fail-2', async () => {
+        throw new Error('504 Gateway Timeout');
+      }));
+
+      await expect(gateway.generate({ promptPackage: getValidPromptPackage() })).rejects.toThrow(GatewayError);
+    } finally {
+      llmConfig.defaultProvider = originalDefaultProvider;
+      llmConfig.fallbackProviders = originalFallbackProviders;
+    }
+  });
+
+  it('should fail fast without retries on explicit provider request non-retryable errors (auth errors)', async () => {
     const pkg = getValidPromptPackage();
     let callCount = 0;
 
@@ -183,7 +321,7 @@ describe('LLM Gateway Engine Tests', () => {
       })
     ).rejects.toThrow('authentication or authorization');
 
-    // Call count should be exactly 1, since auth errors are not retryable
+    // Call count should be exactly 1, since auth errors on explicit provider requests are not retryable
     expect(callCount).toBe(1);
   });
 

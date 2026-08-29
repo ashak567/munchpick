@@ -74,9 +74,9 @@ describe('FR-009 Verification Tests', () => {
 
 describe('Model Selection Architecture Tests', () => {
   it('should select configured conversational model for standard requests', () => {
-    expect(llmConfig.providers.gemini.model).toBe('gemini-1.5-flash');
-    expect(llmConfig.providers.gemini.reasoningModel).toBe('gemini-1.5-pro');
-    expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-1.5-flash-8b');
+    expect(llmConfig.providers.gemini.model).toBe('gemini-2.5-flash');
+    expect(llmConfig.providers.gemini.reasoningModel).toBe('gemini-2.5-flash');
+    expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-3.1-flash-lite');
   });
 
   it('should resolve conversational vs reasoning models in gateway based on provider hints', async () => {
@@ -113,8 +113,8 @@ describe('Model Selection Architecture Tests', () => {
     const stdModel = (standardPkg.providerHints?.supportsReasoning && config.reasoningModel) ? config.reasoningModel : config.model;
     const reasModel = (reasoningPkg.providerHints?.supportsReasoning && config.reasoningModel) ? config.reasoningModel : config.model;
 
-    expect(stdModel).toBe('gemini-1.5-flash');
-    expect(reasModel).toBe('gemini-1.5-pro');
+    expect(stdModel).toBe('gemini-2.5-flash');
+    expect(reasModel).toBe('gemini-2.5-flash');
   });
 
   it('should dynamically select updated models when configuration is changed', async () => {
@@ -125,11 +125,11 @@ describe('Model Selection Architecture Tests', () => {
     try {
       llmConfig.providers.gemini.model = 'gemini-2.5-flash';
       llmConfig.providers.gemini.reasoningModel = 'gemini-2.5-pro';
-      llmConfig.providers.gemini.auxiliaryModel = 'gemini-2.5-flash-lite';
+      llmConfig.providers.gemini.auxiliaryModel = 'gemini-3.1-flash-lite';
 
       expect(llmConfig.providers.gemini.model).toBe('gemini-2.5-flash');
       expect(llmConfig.providers.gemini.reasoningModel).toBe('gemini-2.5-pro');
-      expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-2.5-flash-lite');
+      expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-3.1-flash-lite');
 
       // Verify that Gemini adapter dynamically uses the configured model rather than hardcoded literals
       const adapter = new GeminiProviderAdapter();
@@ -143,7 +143,7 @@ describe('Model Selection Architecture Tests', () => {
 
   it('should verify auxiliary model configuration is accessible for background analysis services', () => {
     expect(llmConfig.providers.gemini.auxiliaryModel).toBeDefined();
-    expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-1.5-flash-8b');
+    expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-3.1-flash-lite');
     expect(llmConfig.providers.anthropic.auxiliaryModel).toBe('claude-3-5-haiku-20241022');
   });
 });

@@ -254,6 +254,10 @@ export class PromptBuilderEngine implements CognitiveEngine {
       if (hints.improveFormatting) {
         mustDo.push('Strictly output correct and properly balanced markdown block syntax.');
       }
+      if (hints.avoidRepetition) {
+        mustDo.push('Write a substantively new answer that directly addresses the CURRENT_USER_MESSAGE.');
+        avoid.push('Do not reuse an opening sentence, follow-up question, or response wording from RECENT_CONVERSATION_HISTORY.');
+      }
     }
 
     mustDo.push(

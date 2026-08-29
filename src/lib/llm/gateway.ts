@@ -169,106 +169,102 @@ export class LLMGateway {
       supportsReasoning: pkg.providerHints?.supportsReasoning ?? false
     };
 
-    const provider = this.resolver.resolve(capabilities, HEALTH_REGISTRY, request.providerId);
-    const providerId = provider.id;
-
-    const config = llmConfig.providers[providerId];
-    if (!config) {
-      throw new GatewayError('unavailable', `LLMGateway: Missing configuration for provider '${providerId}'.`);
-    }
-
-    // Determine target model role based on reasoning capability request
-    const supportsReasoning = pkg.providerHints?.supportsReasoning ?? false;
-    const targetModel = request.model || ((supportsReasoning && config.reasoningModel)
-      ? config.reasoningModel
-      : config.model);
-
-    console.log(`[LLMGateway] [${requestId}] Step: Provider Selected (provider=${providerId}, model=${targetModel})`);
-
-    // Circuit Breaker check
-    this.checkCircuitBreaker(providerId);
-
-    // 3. Token Budget Validation
-    const expectedOutputTokens = request.maxTokens ?? config.maxTokens;
-    const totalEstimatedTokens = pkg.estimatedTokens + expectedOutputTokens;
-
-    if (totalEstimatedTokens > config.maxTokenLimit) {
-      throw new GatewayError(
-        'invalid_response',
-        `LLMGateway: Token budget exceeded. Estimated: ${totalEstimatedTokens}, Limit: ${config.maxTokenLimit}`
-      );
-    }
-
-    // 4. Request Execution with Resiliency Policies (Retry & Timeout)
-    const maxRetries = config.retryCount || 3;
-    const timeoutMs = config.timeoutMs || 5000;
-    let attempt = 0;
+    const providers = this.resolver.resolveCandidates(capabilities, HEALTH_REGISTRY, request.providerId);
     let lastGatewayError: GatewayError | null = null;
-    const startTime = Date.now();
+    for (const provider of providers) {
+      const providerId = provider.id;
+      const config = llmConfig.providers[providerId];
+      if (!config) {
+        lastGatewayError = new GatewayError('unavailable', `LLMGateway: Missing configuration for provider '${providerId}'.`);
+        continue;
+      }
 
-    while (attempt < maxRetries) {
-      attempt++;
-      try {
-        console.log(`[LLMGateway] [${requestId}] Step: Request Started (provider=${providerId}, model=${targetModel}, attempt=${attempt}/${maxRetries}, estTokens=${pkg.estimatedTokens})`);
-
-        const execPromise = provider.generate({
-          promptPackage: pkg,
-          temperature: request.temperature ?? config.temperature,
-          maxTokens: expectedOutputTokens,
-          model: targetModel
-        });
-
-        // Race execution against a timeout promise
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('timeout')), timeoutMs);
-        });
-
-        const response = await Promise.race([execPromise, timeoutPromise]) as LLMResponse;
-        const latency = Date.now() - startTime;
-
-        console.log(`[LLMGateway] [${requestId}] Step: Request Completed (provider=${providerId}, model=${targetModel}, latency=${latency}ms, promptTokens=${response.promptTokens}, completionTokens=${response.completionTokens}, status=success)`);
-
-        // Record health success stats
-        this.recordSuccess(providerId, latency);
-
-        const metrics: GatewayMetrics = {
-          providerId,
-          modelId: targetModel,
-          finishReason: response.finishReason,
-          promptTokens: response.promptTokens,
-          completionTokens: response.completionTokens,
-          totalTokens: response.promptTokens + response.completionTokens,
-          latency,
-          retries: attempt - 1,
-          timeoutMs,
-          gatewayVersion: 'v1.0.0'
-        };
-
-        return {
-          requestId,
-          text: response.text,
-          metrics,
-          streamed: false
-        };
-      } catch (err: any) {
-        const mappedErr = this.mapError(err);
-        lastGatewayError = mappedErr;
-
-        console.warn(`[LLMGateway] [${requestId}] Step: Request Failed (provider=${providerId}, model=${targetModel}, attempt=${attempt}/${maxRetries}, error=${mappedErr.message}, status=failure)`);
-
-        // Only retry retryable errors
-        if (!this.isRetryable(mappedErr)) {
-          this.recordFailure(providerId);
-          throw mappedErr;
+      if (provider.isConfigured && !provider.isConfigured()) {
+        if (request.providerId) {
+          throw new GatewayError('unauthorized', `LLMGateway: Provider '${providerId}' failed authentication or authorization (unconfigured or missing API credentials).`);
         }
+        console.warn(`[LLMGateway] [${requestId}] Provider '${providerId}' is unconfigured (missing API credentials). Skipping to next candidate.`);
+        lastGatewayError = new GatewayError('unauthorized', `LLMGateway: Provider '${providerId}' failed authentication or authorization (unconfigured or missing API credentials).`);
+        continue;
+      }
 
-        // Record failure in health registry
-        if (attempt >= maxRetries) {
-          this.recordFailure(providerId);
+      const supportsReasoning = pkg.providerHints?.supportsReasoning ?? false;
+      const targetModel = request.model || ((supportsReasoning && config.reasoningModel)
+        ? config.reasoningModel
+        : config.model);
+      const expectedOutputTokens = request.maxTokens ?? config.maxTokens;
+      const totalEstimatedTokens = pkg.estimatedTokens + expectedOutputTokens;
+      if (totalEstimatedTokens > config.maxTokenLimit) {
+        throw new GatewayError('invalid_response', `LLMGateway: Token budget exceeded. Estimated: ${totalEstimatedTokens}, Limit: ${config.maxTokenLimit}`);
+      }
+
+      try {
+        this.checkCircuitBreaker(providerId);
+      } catch (error: any) {
+        lastGatewayError = this.mapError(error);
+        console.warn(`[LLMGateway] [${requestId}] Circuit open for provider '${providerId}'. Skipping to next candidate.`);
+        continue;
+      }
+
+      const maxRetries = config.retryCount || 3;
+      const timeoutMs = config.timeoutMs || 5000;
+      const startTime = Date.now();
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[LLMGateway] [${requestId}] Step: Request Started (provider=${providerId}, model=${targetModel}, attempt=${attempt}/${maxRetries}, estTokens=${pkg.estimatedTokens})`);
+          const execPromise = provider.generate({
+            promptPackage: pkg,
+            temperature: request.temperature ?? config.temperature,
+            maxTokens: expectedOutputTokens,
+            model: targetModel
+          });
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('timeout')), timeoutMs);
+          });
+          const response = await Promise.race([execPromise, timeoutPromise]) as LLMResponse;
+          const latency = Date.now() - startTime;
+          this.recordSuccess(providerId, latency);
+
+          return {
+            requestId,
+            text: response.text,
+            metrics: {
+              providerId,
+              modelId: targetModel,
+              finishReason: response.finishReason,
+              promptTokens: response.promptTokens,
+              completionTokens: response.completionTokens,
+              totalTokens: response.promptTokens + response.completionTokens,
+              latency,
+              retries: attempt - 1,
+              timeoutMs,
+              gatewayVersion: 'v1.1.0'
+            },
+            streamed: false
+          };
+        } catch (error: any) {
+          const mappedErr = this.mapError(error);
+          lastGatewayError = mappedErr;
+          console.warn(`[LLMGateway] [${requestId}] Step: Request Failed (provider=${providerId}, model=${targetModel}, attempt=${attempt}/${maxRetries}, error=${mappedErr.message}, status=failure)`);
+
+          if (mappedErr.type === 'unauthorized') {
+            this.recordFailure(providerId);
+            if (request.providerId) {
+              throw mappedErr;
+            }
+            console.warn(`[LLMGateway] [${requestId}] Provider '${providerId}' authentication failed. Skipping to next candidate.`);
+            break;
+          }
+
+          if (!this.isRetryable(mappedErr) || attempt === maxRetries) {
+            this.recordFailure(providerId);
+            break;
+          }
         }
       }
     }
 
-    throw lastGatewayError || new GatewayError('unknown', 'LLMGateway request failed.');
+    throw lastGatewayError || new GatewayError('unknown', 'LLMGateway: Every configured provider failed.');
   }
 }

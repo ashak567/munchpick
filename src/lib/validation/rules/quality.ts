@@ -1,5 +1,18 @@
 import { ValidationPlugin, ResponseValidatorInput, ValidationIssue } from '../types';
 
+function normalizeForComparison(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function firstSentence(text: string): string {
+  const match = text.trim().match(/^(.+?[.!?])(?:\s|$)/);
+  return match ? match[1] : text.trim();
+}
+
 export class QualityValidationPlugin implements ValidationPlugin {
   public id = 'quality-validation';
 
@@ -8,6 +21,40 @@ export class QualityValidationPlugin implements ValidationPlugin {
     const text = input.gatewayResponse.text?.trim() || '';
 
     if (!text) return issues;
+
+    // Rule 0: Cross-turn repetition. The model is allowed to use history for
+    // continuity, but it must not resend a prior mascot response or opening.
+    const normalizedText = normalizeForComparison(text);
+    const normalizedOpening = normalizeForComparison(firstSentence(text));
+    for (const previous of input.previousAssistantResponses || []) {
+      if (!previous || !previous.trim()) continue;
+
+      const normalizedPrevious = normalizeForComparison(previous);
+      if (normalizedText && normalizedText === normalizedPrevious) {
+        issues.push({
+          id: 'quality-repeat-assistant-response',
+          category: 'quality',
+          severity: 'critical',
+          message: 'Response duplicates a previous assistant message from this conversation.',
+          recommendation: 'Regenerate a substantively new response that addresses the current user message.',
+          retryHint: { avoidRepetition: true }
+        });
+        break;
+      }
+
+      const previousOpening = normalizeForComparison(firstSentence(previous));
+      if (normalizedOpening.length >= 24 && normalizedOpening === previousOpening) {
+        issues.push({
+          id: 'quality-repeat-assistant-opening',
+          category: 'quality',
+          severity: 'critical',
+          message: 'Response reuses the opening sentence of a previous assistant message.',
+          recommendation: 'Regenerate with a new opening that directly addresses the current user message.',
+          retryHint: { avoidRepetition: true }
+        });
+        break;
+      }
+    }
 
     // Rule 1: Duplicate paragraphs
     const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);

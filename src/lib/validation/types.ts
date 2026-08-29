@@ -11,6 +11,7 @@ export interface RetryHints {
   reduceQuestions: boolean;
   strengthenEmpathy: boolean;
   improveFormatting: boolean;
+  avoidRepetition: boolean;
 }
 
 export interface ValidationIssue {
@@ -29,6 +30,8 @@ export interface ResponseValidatorInput {
   personalityDecision?: PersonalityDecision;
   mascotDecision?: MascotDecision;
   contextAssembly?: ContextAssembly;
+  /** Recent assistant messages from this chat, ordered from oldest to newest. */
+  previousAssistantResponses?: string[];
 }
 
 export interface ValidationPlugin {

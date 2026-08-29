@@ -140,7 +140,8 @@ export class ResponseValidator {
       removeHumor: false,
       reduceQuestions: false,
       strengthenEmpathy: false,
-      improveFormatting: false
+      improveFormatting: false,
+      avoidRepetition: false
     };
 
     for (const issue of issues) {
@@ -150,6 +151,7 @@ export class ResponseValidator {
         if (issue.retryHint.reduceQuestions) hints.reduceQuestions = true;
         if (issue.retryHint.strengthenEmpathy) hints.strengthenEmpathy = true;
         if (issue.retryHint.improveFormatting) hints.improveFormatting = true;
+        if (issue.retryHint.avoidRepetition) hints.avoidRepetition = true;
       }
     }
 

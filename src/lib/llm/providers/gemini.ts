@@ -15,6 +15,11 @@ export class GeminiProviderAdapter implements LLMProvider {
     return true;
   }
 
+  public isConfigured(): boolean {
+    const apiKey = serverEnv?.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+    return Boolean(apiKey && apiKey !== 'MOCK_KEY');
+  }
+
   public async generate(request: LLMRequest): Promise<LLMResponse> {
     const apiKey = serverEnv?.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
     if (!apiKey || apiKey === 'MOCK_KEY') {
@@ -23,7 +28,9 @@ export class GeminiProviderAdapter implements LLMProvider {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const config = llmConfig.providers.gemini;
-    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? (config?.reasoningModel || 'gemini-1.5-pro') : (config?.model || 'gemini-1.5-flash'));
+    const defaultModel = config?.model || 'gemini-2.5-flash';
+    const defaultReasoning = config?.reasoningModel || defaultModel;
+    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? defaultReasoning : defaultModel);
 
     const model = genAI.getGenerativeModel({
       model: modelName,
@@ -58,7 +65,9 @@ export class GeminiProviderAdapter implements LLMProvider {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const config = llmConfig.providers.gemini;
-    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? (config?.reasoningModel || 'gemini-1.5-pro') : (config?.model || 'gemini-1.5-flash'));
+    const defaultModel = config?.model || 'gemini-2.5-flash';
+    const defaultReasoning = config?.reasoningModel || defaultModel;
+    const modelName = request.model || (request.promptPackage?.providerHints?.supportsReasoning ? defaultReasoning : defaultModel);
     const model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {

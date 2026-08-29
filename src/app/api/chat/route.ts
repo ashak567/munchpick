@@ -360,6 +360,10 @@ export async function POST(request: NextRequest) {
       .limit(10);
 
     const chatHistory = (recentMessages || []).reverse();
+    const previousAssistantResponses = chatHistory
+      .filter((message: any) => message.sender === 'mascot' || message.role === 'assistant')
+      .map((message: any) => typeof message.content === 'string' ? message.content.trim() : '')
+      .filter(Boolean);
 
     // Retrieve previous story state, progress, insights, memories, decisions, and personality from the last mascot message's nlu_metadata if present
     let previousStoryState: any = undefined;
@@ -511,7 +515,8 @@ export async function POST(request: NextRequest) {
         responsePlan: finalTrace.responsePlan,
         personalityDecision: finalTrace.personalityDecision,
         mascotDecision: finalTrace.mascotDecision,
-        contextAssembly: finalTrace.contextAssembly
+        contextAssembly: finalTrace.contextAssembly,
+        previousAssistantResponses
       };
 
       validationResult = validator.validate(validatorInput, retryAttempt);
@@ -526,6 +531,12 @@ export async function POST(request: NextRequest) {
       } else {
         break;
       }
+    }
+
+    if (!validationResult.passed && validationResult.issues.some((issue: any) =>
+      issue.id === 'quality-repeat-assistant-response' || issue.id === 'quality-repeat-assistant-opening'
+    )) {
+      throw new Error('Unable to generate a non-repetitive response. Please try again.');
     }
 
     // Run ResponseExpressionEngine (the final presentation layer before delivery)
