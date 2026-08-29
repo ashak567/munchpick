@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { getWelcomeState, markEnvelopeAsRead } from '@/lib/envelope/service'
+import { getWelcomeState, markEnvelopeAsRead, generateLetterContent } from '@/lib/envelope/service'
 import { jsonNoStore } from '@/lib/api-headers'
 
 export async function GET(request: NextRequest) {
@@ -19,8 +19,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 2. Fetch current welcome state strictly for authenticated user.id
-    const state = await getWelcomeState(user.id)
+    // 2. Extract query params
+    const chatId = request.nextUrl.searchParams.get('chatId') || undefined
+    const message = request.nextUrl.searchParams.get('message') || undefined
+
+    // 3. Fetch current welcome state strictly for authenticated user.id
+    const state = await getWelcomeState(user.id, {
+      chatId,
+      currentUserMessage: message
+    })
 
     return jsonNoStore(state)
   } catch (error: unknown) {
@@ -50,7 +57,20 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse payload
     const body = await request.json()
-    const { letterId } = body
+    const { letterId, action, chatId, message, cognitiveState, currentTopic } = body
+
+    // If generating on-demand envelope
+    if (action === 'generate') {
+      const content = await generateLetterContent({
+        userId: user.id,
+        chatId: chatId || null,
+        currentUserMessage: message,
+        cognitiveState,
+        currentTopic,
+        triggerType: 'conversational'
+      })
+      return jsonNoStore({ content })
+    }
 
     if (!letterId) {
       return jsonNoStore(

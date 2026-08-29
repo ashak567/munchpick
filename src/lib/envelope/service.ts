@@ -1,10 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { serverEnv } from '@/lib/env'
-import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config'
+import { getApprovedGeminiModel } from '@/lib/llm/config'
 import { createClient } from '@/utils/supabase/server'
 import { MascotCharacter, MascotExpression } from '@/components/Mascot'
 import { getRelationshipState, getGreetingName } from '@/lib/nickname/service'
-import { EnvelopeLetterType, EnvelopeLetter, WelcomeState } from './types'
+import { EnvelopeLetterType, EnvelopeLetter, WelcomeState, EnvelopeGenerationContext } from './types'
+import { checkEnvelopeRepetition, generateContextualFallback } from './anti-repetition'
+
+export { checkEnvelopeRepetition, generateContextualFallback } from './anti-repetition'
 
 // Initialize Gemini safely
 const getGeminiModel = () => {
@@ -20,18 +23,23 @@ const getGeminiModel = () => {
 /**
  * Checks if the user is in an envelope cooldown period or has an active unread envelope.
  */
-export async function checkEnvelopeCooldown(userId: string): Promise<{
+export async function checkEnvelopeCooldown(userId: string, chatId?: string | null): Promise<{
   hasActiveUnread: boolean
   cooldownActive: boolean
   activeLetter: EnvelopeLetter | null
 }> {
   const supabase = await createClient()
 
-  // Fetch the latest envelope letter for the user
-  const { data: latest, error } = await supabase
+  let query = supabase
     .from('envelope_letters')
     .select('*')
     .eq('user_id', userId)
+
+  if (chatId) {
+    query = query.eq('chat_id', chatId)
+  }
+
+  const { data: latest, error } = await query
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -60,6 +68,38 @@ export async function checkEnvelopeCooldown(userId: string): Promise<{
   }
 
   return { hasActiveUnread: false, cooldownActive: false, activeLetter: null }
+}
+
+/**
+ * Retrieves previous envelope letter contents strictly scoped by user_id and optionally chat_id.
+ */
+export async function getPreviousEnvelopesForConversation(
+  userId: string,
+  chatId?: string | null
+): Promise<string[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('envelope_letters')
+    .select('content, created_at')
+    .eq('user_id', userId)
+
+  if (chatId) {
+    query = query.eq('chat_id', chatId)
+  }
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    console.error('[EnvelopeService] Error fetching previous envelopes:', error)
+    return []
+  }
+
+  return (data || [])
+    .map((d: any) => d.content)
+    .filter((c: any) => typeof c === 'string' && c.trim().length > 0)
 }
 
 /**
@@ -295,64 +335,116 @@ export async function generateMunchNotices(userId: string): Promise<string[]> {
 }
 
 /**
- * Generates letter content using Gemini (with rule-based fallbacks and safety rules).
+ * Generates fresh, context-specific envelope letter content using Gemini
+ * with anti-repetition validation and contextual fallback recovery.
  */
 export async function generateLetterContent(
-  userId: string,
-  nickname: string,
-  relationshipLevel: string,
-  triggerType: EnvelopeLetterType,
-  milestoneKey: string | null
+  userIdOrContext: string | EnvelopeGenerationContext,
+  nicknameParam?: string,
+  relationshipLevelParam?: string,
+  triggerTypeParam?: EnvelopeLetterType,
+  milestoneKeyParam?: string | null,
+  optionsParam?: Partial<EnvelopeGenerationContext>
 ): Promise<string> {
   const supabase = await createClient()
 
-  // 1. Fetch recent memories for personalization
-  const { data: memories } = await supabase
-    .from('user_memories')
-    .select('summary')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(3)
-
-  const recentMemoriesText = (memories || []).map((m) => m.summary).join(', ')
-
-  // 2. Default fallbacks
-  const fallbacks: Record<string, string> = {
-    signup: `Welcome to Munch, ${nickname}. Take a slow breath. I'm here to help you find comfort in your choices. Let's write down what's on your mind.`,
-    daily_return: `Hi ${nickname}. It's good to see you again. I hope you're taking care of your rhythm today. What are we figuring out?`,
-    inactivity: `Welcome back, ${nickname}. It's been a little while since we last checked in. I'm right here whenever you're ready to share.`,
-    milestone: `Hi ${nickname}. We're hitting a gentle milestone together. That's a soft step forward. I'm glad to walk this path with you.`
+  // Normalize input into EnvelopeGenerationContext
+  let context: EnvelopeGenerationContext
+  if (typeof userIdOrContext === 'object') {
+    context = userIdOrContext
+  } else {
+    context = {
+      userId: userIdOrContext,
+      nickname: nicknameParam,
+      relationshipLevel: relationshipLevelParam,
+      triggerType: triggerTypeParam || 'signup',
+      milestoneKey: milestoneKeyParam,
+      ...optionsParam
+    }
   }
 
-  const milestoneFallbacks: Record<string, string> = {
-    first_decision: `Hi ${nickname}. We made our very first choice together. That's a gentle step forward. I'm glad to walk this path with you.`,
-    '10_decisions': `Hello ${nickname}. We've shared ten choices together. I'm glad we could slow down the noise for these moments.`,
-    '25_decisions': `Hi ${nickname}. Twenty-five choices made! Thank you for sharing these steps in your day with me.`,
-    '50_decisions': `Greetings ${nickname}. Fifty decisions together. It's a quiet rhythm we're building, one step at a time.`,
-    '100_decisions': `Dear ${nickname}. One hundred choices explored. Thank you for trusting me with your thoughts. I'm glad to be here.`,
-    first_memory: `Hi ${nickname}. We saved our first memory together. It's nice to keep a small journal of what brings you comfort.`,
-    first_week: `Hello ${nickname}. A whole week since we met. I'm glad we've been sharing this space.`
+  const userId = context.userId
+  const chatId = context.chatId || null
+
+  // 1. Resolve missing profile / nickname / level if not provided
+  const nickname = context.nickname || await getGreetingName(userId)
+  const relationshipLevel = context.relationshipLevel || (await getRelationshipState(userId)).level
+  const triggerType = context.triggerType || 'signup'
+  const milestoneKey = context.milestoneKey || null
+
+  // 2. Fetch recent memories if not provided
+  let memoriesText = ''
+  if (context.relevantMemories && context.relevantMemories.length > 0) {
+    memoriesText = context.relevantMemories.join(', ')
+  } else {
+    const { data: memories } = await supabase
+      .from('user_memories')
+      .select('summary')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(3)
+    memoriesText = (memories || []).map((m: any) => m.summary).join(', ')
   }
 
-  const defaultContent = milestoneKey ? (milestoneFallbacks[milestoneKey] || fallbacks.milestone) : fallbacks[triggerType]
+  // 3. Fetch previous envelopes for THIS conversation to enforce anti-repetition
+  let previousEnvelopes = context.previousEnvelopes
+  if (!previousEnvelopes) {
+    previousEnvelopes = await getPreviousEnvelopesForConversation(userId, chatId)
+  }
+
+  // 4. Fetch recent chat messages if chatId provided and history not supplied
+  let chatHistoryText = ''
+  if (context.recentChatHistory && context.recentChatHistory.length > 0) {
+    chatHistoryText = context.recentChatHistory.map(m => `${m.sender}: ${m.content}`).join('\n')
+  } else if (chatId) {
+    const { data: msgs } = await supabase
+      .from('chat_messages')
+      .select('sender, content, created_at')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: false })
+      .limit(6)
+    if (msgs && msgs.length > 0) {
+      chatHistoryText = msgs.reverse().map((m: any) => `${m.sender}: ${m.content}`).join('\n')
+    }
+  }
+
+  const currentUserMsg = context.currentUserMessage || ''
+  const currentTopic = context.currentTopic || context.cognitiveState?.activeTopicKey || 'general'
+  const emotionsList = context.cognitiveState?.emotions?.join(', ') || ''
 
   const model = getGeminiModel()
   if (model) {
-    const prompt = `
+    let retryFeedback = ''
+    const maxRetries = 2
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const prompt = `
 You are Munch 🍀, a gentle four-leaf clover companion.
-We need to generate a warm, gentle letter (exactly 1 to 2 sentences) for the user.
-You MUST follow these safety rules:
+We need to generate a warm, natural letter (exactly 1 to 2 sentences) for the user.
+
+SAFETY & BEHAVIOR RULES:
 - Never fabricate memories, emotions, or relationships.
 - Use uncertainty language if evidence is weak (e.g. "I wonder if...", "You might be feeling...").
 - Do not exaggerate the relationship level.
 - Focus on gentle companionship, not sounding intelligent or diagnostic.
+- Output MUST reflect the CURRENT context and latest user message.
 
-Context:
+CURRENT CONTEXT:
 - User Nickname: ${nickname}
 - Relationship Level: ${relationshipLevel}
 - Trigger Type: ${triggerType}
-- Milestone Key (if milestone): ${milestoneKey || 'none'}
-- Recent Stored Memories: [${recentMemoriesText}]
+- Milestone Key: ${milestoneKey || 'none'}
+- Current User Message: ${currentUserMsg ? `"${currentUserMsg}"` : 'none'}
+- Current Topic: ${currentTopic}
+- Cognitive / Emotional State: ${emotionsList || 'calm/neutral'}
+- Recent Conversation History:
+${chatHistoryText || 'No previous messages in this session.'}
+- Recent Stored Memories: [${memoriesText}]
+
+PREVIOUS ENVELOPE MESSAGES IN THIS CONVERSATION (DO NOT REPEAT OR CLOSELY PARAPHRASE THESE):
+${previousEnvelopes.length > 0 ? previousEnvelopes.map((p, idx) => `${idx + 1}. "${p}"`).join('\n') : 'None yet.'}
+
+${retryFeedback ? `CRITICAL REPETITION WARNING:\n${retryFeedback}\nYou MUST write a completely different sentence structure and perspective.\n` : ''}
 
 Write a short handwritten-style letter based on this context. Output must be JSON format:
 {
@@ -360,26 +452,56 @@ Write a short handwritten-style letter based on this context. Output must be JSO
 }
 `
 
-    try {
-      const response = await model.generateContent(prompt)
-      const text = response.response.text()
-      const parsed = JSON.parse(text)
-      if (parsed && typeof parsed.letter === 'string' && parsed.letter.trim()) {
-        return parsed.letter.trim()
+      try {
+        const response = await model.generateContent(prompt)
+        const text = response.response.text()
+        const parsed = JSON.parse(text)
+        if (parsed && typeof parsed.letter === 'string' && parsed.letter.trim()) {
+          const candidate = parsed.letter.trim()
+
+          // Check anti-repetition against previous envelopes of this conversation
+          const repetition = checkEnvelopeRepetition(candidate, previousEnvelopes)
+          if (!repetition.isRepetitive) {
+            return candidate
+          }
+
+          console.warn(`[EnvelopeService] Candidate rejected (attempt ${attempt + 1}/${maxRetries + 1}): ${repetition.reason}. Candidate: "${candidate}"`)
+          retryFeedback = `The previous candidate was rejected for being too repetitive: "${candidate}". Reason: ${repetition.reason}. Focus on a completely different angle and expression.`
+        }
+      } catch (err) {
+        console.warn(`[EnvelopeService] Gemini letter generation failed (attempt ${attempt + 1}):`, err)
       }
-    } catch (err) {
-      console.warn('[EnvelopeService] Gemini letter generation failed, falling back:', err)
     }
   }
 
-  return defaultContent
+  // 5. Deterministic Contextual Fallback (guaranteed non-repetitive)
+  const fullContext: EnvelopeGenerationContext = {
+    ...context,
+    nickname,
+    relationshipLevel,
+    triggerType,
+    milestoneKey,
+    previousEnvelopes
+  }
+
+  return generateContextualFallback(fullContext, previousEnvelopes)
 }
 
 /**
  * Resolves a dynamic welcome state, checking for envelope triggers or applying freshness.
  */
-export async function getWelcomeState(userId: string): Promise<WelcomeState> {
+export async function getWelcomeState(
+  userId: string,
+  options?: {
+    chatId?: string | null
+    currentUserMessage?: string
+    recentChatHistory?: Array<{ sender: string; content: string }>
+    currentTopic?: string
+    cognitiveState?: any
+  }
+): Promise<WelcomeState> {
   const supabase = await createClient()
+  const chatId = options?.chatId || null
 
   // 1. Resolve User and Nickname/Level
   const { data: userRecord } = await supabase
@@ -388,7 +510,6 @@ export async function getWelcomeState(userId: string): Promise<WelcomeState> {
     .eq('id', userId)
     .single()
 
-  const userName = userRecord?.name || 'friend'
   const nickname = await getGreetingName(userId)
   const { level } = await getRelationshipState(userId)
 
@@ -396,10 +517,10 @@ export async function getWelcomeState(userId: string): Promise<WelcomeState> {
   const notices = await generateMunchNotices(userId)
 
   // 3. Check Cooldown & Active Envelope
-  const { hasActiveUnread, cooldownActive, activeLetter } = await checkEnvelopeCooldown(userId)
+  const { hasActiveUnread, cooldownActive, activeLetter } = await checkEnvelopeCooldown(userId, chatId)
 
   if (hasActiveUnread && activeLetter) {
-    // Return existing unread envelope
+    // Return existing unread envelope without regenerating
     return {
       greeting: `Hello, ${nickname}!`,
       presentation_type: activeLetter.presentation_type,
@@ -471,26 +592,44 @@ export async function getWelcomeState(userId: string): Promise<WelcomeState> {
     const emotionalContext = await resolveEmotionalContext(userId)
     const { character, expression } = await selectMascotPersonality(userId, emotionalContext, level)
     const scene = await selectWeightedScene(userId)
-    const content = await generateLetterContent(userId, nickname, level, triggerType, milestoneKey)
+
+    const content = await generateLetterContent({
+      userId,
+      chatId,
+      nickname,
+      relationshipLevel: level,
+      triggerType,
+      milestoneKey,
+      currentUserMessage: options?.currentUserMessage,
+      recentChatHistory: options?.recentChatHistory,
+      currentTopic: options?.currentTopic,
+      cognitiveState: options?.cognitiveState
+    })
 
     // 60% envelope, 40% direct
     const presentationType = Math.random() < 0.6 ? 'envelope' : 'direct'
 
+    const insertPayload: any = {
+      user_id: userId,
+      letter_type: triggerType,
+      milestone_key: milestoneKey,
+      content,
+      mascot_character_used: character,
+      mascot_expression: expression,
+      scene_used: scene,
+      presentation_type: presentationType,
+      relationship_level_snapshot: level,
+      nickname_snapshot: nickname,
+      is_read: false
+    }
+
+    if (chatId) {
+      insertPayload.chat_id = chatId
+    }
+
     const { data: newLetter, error: insertError } = await supabase
       .from('envelope_letters')
-      .insert({
-        user_id: userId,
-        letter_type: triggerType,
-        milestone_key: milestoneKey,
-        content,
-        mascot_character_used: character,
-        mascot_expression: expression,
-        scene_used: scene,
-        presentation_type: presentationType,
-        relationship_level_snapshot: level,
-        nickname_snapshot: nickname,
-        is_read: false
-      })
+      .insert(insertPayload)
       .select()
       .single()
 
@@ -565,7 +704,7 @@ export async function getWelcomeState(userId: string): Promise<WelcomeState> {
     .from('users')
     .update({ last_active_at: new Date().toISOString() })
     .eq('id', userId)
-    .then(({ error }) => {
+    .then(({ error }: any) => {
       if (error) console.error('[EnvelopeService] Failed to update user last active time:', error)
     })
 
