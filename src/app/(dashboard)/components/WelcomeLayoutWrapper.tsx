@@ -26,7 +26,7 @@ export default function WelcomeLayoutWrapper({ children }: { children: React.Rea
 
   return (
     <div 
-      className={`flex-1 flex flex-col min-h-screen relative transition-all duration-1000 overflow-hidden ${
+      className={`h-[100dvh] w-full flex flex-col relative transition-all duration-1000 overflow-hidden ${
         scene === 'midnight_peace' ? 'dark-theme' : ''
       } ${bgClass}`}
     >
@@ -34,7 +34,7 @@ export default function WelcomeLayoutWrapper({ children }: { children: React.Rea
       {!isChatRoute && <AmbientBackground />}
 
       {/* Main Workspace Inner content */}
-      <div className="flex-1 flex flex-col relative z-10">
+      <div className="flex-1 flex flex-col relative z-10 min-h-0 h-full overflow-hidden">
         {children}
       </div>
     </div>

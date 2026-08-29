@@ -35,7 +35,7 @@ export default function CompanionSidebar({
     <motion.aside
       variants={MOTION_SYSTEM_VARIANTS.sidebarSlide}
       animate={isCollapsed ? 'collapsed' : 'expanded'}
-      className={`h-[100dvh] flex flex-col justify-between border-r border-white/50 bg-white/75 backdrop-blur-md relative p-4 flex-shrink-0 z-30 ${className}`}
+      className={`h-full max-h-[100dvh] flex flex-col justify-between border-r border-white/50 bg-white/75 backdrop-blur-md relative p-4 flex-shrink-0 z-30 overflow-y-auto overflow-x-hidden scrollbar-none ${className}`}
     >
       <div className="flex flex-col gap-6 items-center">
         {/* Toggle Collapse Trigger */}

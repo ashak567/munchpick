@@ -519,11 +519,11 @@ export default function DashboardPage() {
                 ? `${layout.keyboardHeight + 8}px` 
                 : 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 24px)')
             : '8px',
-          paddingTop: '6px'
+          paddingTop: '8px'
         }}
       >
         {/* Companion Header Profile */}
-        <header className="sticky top-0 z-20 backdrop-blur-md bg-white/75 border border-white/80 shadow-3xs rounded-2xl px-4 py-2.5 my-2 flex items-center justify-between flex-shrink-0">
+        <header className="sticky top-0 z-20 backdrop-blur-md bg-white/75 border border-white/80 shadow-3xs rounded-2xl px-4 py-2.5 mb-2 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative">
               <CompanionStage 

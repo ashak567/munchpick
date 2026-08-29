@@ -70,7 +70,7 @@ export default function DashboardShell({
   // ── Chat route: full-screen with responsive navigation ─────────────────────
   if (isChatRoute) {
     return (
-      <div className="flex-1 flex overflow-hidden h-[100dvh]">
+      <div className="flex-1 flex overflow-hidden h-full w-full min-h-0">
         {/* Desktop Sidebar (lg+ only) */}
         <div className="hidden lg:flex h-full flex-shrink-0">
           <CompanionSidebar
@@ -82,8 +82,8 @@ export default function DashboardShell({
         </div>
 
         {/* Chat Area */}
-        <div className="flex-grow flex flex-col min-h-0 overflow-hidden relative">
-          <div className="flex-grow flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden relative">
+          <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
             {children}
           </div>
 
@@ -98,9 +98,9 @@ export default function DashboardShell({
 
   // ── Non-chat routes (Journal, Conversations, Profile) ────────────────────
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 flex overflow-hidden h-full w-full min-h-0">
       {/* ── Desktop Sidebar (lg+ only) ─────────────────────────────────── */}
-      <div className="hidden lg:flex">
+      <div className="hidden lg:flex h-full flex-shrink-0">
         <CompanionSidebar
           activeMascot={preferredMascot}
           activeExpression="idle"
@@ -110,9 +110,9 @@ export default function DashboardShell({
       </div>
 
       {/* ── Main content column ───────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden h-full min-h-0">
         {/* Mobile-only Top App Bar */}
-        <header className="lg:hidden sticky top-0 z-40 glass-panel border-b border-white/40 px-4 py-3 flex items-center justify-between">
+        <header className="lg:hidden sticky top-0 z-40 glass-panel border-b border-white/40 px-4 py-3 flex items-center justify-between flex-shrink-0">
           <Link href="/dashboard" className="flex items-center gap-1.5">
             <span className="text-2xl">🍀</span>
             <span className="font-display text-xl font-bold text-primary-dark">
@@ -130,14 +130,14 @@ export default function DashboardShell({
         </header>
 
         {/* Scrollable content area */}
-        <main className="flex-1 overflow-y-auto pb-28 lg:pb-8">
+        <main className="flex-1 overflow-y-auto pb-28 lg:pb-8 min-h-0 scrollbar-thin">
           <div className="max-w-lg mx-auto w-full px-4 pt-6 lg:max-w-2xl lg:px-8 lg:pt-8">
             {children}
           </div>
         </main>
 
         {/* Mobile Bottom Nav (hidden on desktop — sidebar handles desktop nav) */}
-        <div className="lg:hidden">
+        <div className="lg:hidden flex-shrink-0">
           <BottomNav />
         </div>
       </div>
