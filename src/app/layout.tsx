@@ -34,7 +34,7 @@ export default function RootLayout({
       lang="en"
       className={`${baloo.variable} ${poppins.variable} h-full antialiased`}
     >
-      <body className="h-full min-h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col antialiased">
+      <body className="min-h-[100dvh] flex flex-col antialiased">
         {children}
         <script
           dangerouslySetInnerHTML={{

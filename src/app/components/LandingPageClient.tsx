@@ -81,7 +81,7 @@ export default function LandingPageClient() {
   const isDark = scene === 'midnight_peace'
 
   return (
-    <div className={`flex-grow flex flex-col relative overflow-hidden transition-all duration-1000 bg-gradient-to-b ${bgClass}`}>
+    <div className={`flex-1 min-h-screen flex flex-col relative transition-all duration-1000 bg-gradient-to-b ${bgClass}`}>
       {/* Background clover/star particle systems */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
         <AnimatePresence>
