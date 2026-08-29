@@ -9,6 +9,7 @@ import {
 import { ProviderResolver } from './resolver';
 import { llmConfig } from './config';
 import { estimateTokens } from '../reflection/context-assembly';
+import { buildContinuationPromptPackage, safeJoinContinuation } from './continuation';
 
 export class GatewayError extends Error {
   constructor(
@@ -226,8 +227,90 @@ export class LLMGateway {
           const latency = Date.now() - startTime;
           this.recordSuccess(providerId, latency);
 
+          // Phase 7.2: Truncation-Resilient Response Continuation
           if (response.finishReason === 'length') {
-            console.warn(`[LLMGateway] [${requestId}] Warning: Provider '${providerId}' returned response with finishReason='length' (possible truncation).`);
+            console.warn(`[LLMGateway] [${requestId}] Warning: Provider '${providerId}' truncated with finishReason='length'. Attempting continuation recovery with fallback providers...`);
+            const partialText = response.text;
+            const continuationPkg = buildContinuationPromptPackage(pkg, partialText);
+            const currentIdx = providers.indexOf(provider);
+            const continuationCandidates = providers.slice(currentIdx + 1);
+
+            for (const contProvider of continuationCandidates) {
+              const contId = contProvider.id;
+              const contConfig = llmConfig.providers[contId];
+              if (!contConfig) continue;
+
+              if (contProvider.isConfigured && !contProvider.isConfigured()) {
+                console.warn(`[LLMGateway] [${requestId}] Continuation provider '${contId}' is unconfigured. Skipping.`);
+                continue;
+              }
+
+              try {
+                this.checkCircuitBreaker(contId);
+              } catch (err: any) {
+                console.warn(`[LLMGateway] [${requestId}] Circuit open for continuation provider '${contId}'. Skipping.`);
+                continue;
+              }
+
+              const contModel = contConfig.model || contId;
+              const contTimeout = contConfig.timeoutMs || 5000;
+              const contMaxTokens = contConfig.maxTokens || 800;
+
+              try {
+                console.log(`[LLMGateway] [${requestId}] Step: Continuation Started (provider=${contId}, model=${contModel})`);
+                const contPromise = contProvider.generate({
+                  promptPackage: continuationPkg,
+                  temperature: request.temperature ?? contConfig.temperature ?? 0.7,
+                  maxTokens: contMaxTokens,
+                  model: contModel
+                });
+                const contTimeoutPromise = new Promise<never>((_, reject) => {
+                  setTimeout(() => reject(new Error('timeout')), contTimeout);
+                });
+                const contResponse = await Promise.race([contPromise, contTimeoutPromise]) as LLMResponse;
+                const contLatency = Date.now() - startTime;
+                this.recordSuccess(contId, contLatency);
+
+                const combinedText = safeJoinContinuation(partialText, contResponse.text);
+                console.log(`[LLMGateway] [${requestId}] Step: Continuation Succeeded (provider=${contId}, combinedLength=${combinedText.length})`);
+
+                return {
+                  requestId,
+                  text: combinedText,
+                  metrics: {
+                    providerId,
+                    modelId: `${targetModel} -> ${contModel}`,
+                    finishReason: contResponse.finishReason,
+                    promptTokens: response.promptTokens + contResponse.promptTokens,
+                    completionTokens: response.completionTokens + contResponse.completionTokens,
+                    totalTokens: (response.promptTokens + contResponse.promptTokens) + (response.completionTokens + contResponse.completionTokens),
+                    latency: Date.now() - startTime,
+                    retries: attempt - 1,
+                    timeoutMs,
+                    gatewayVersion: 'v1.1.0',
+                    initialProvider: providerId,
+                    continuationProvider: contId,
+                    continuationAttempted: true,
+                    initialFinishReason: 'length',
+                    finalFinishReason: contResponse.finishReason,
+                    continuationCount: 1,
+                    finalResponseLength: combinedText.length
+                  },
+                  streamed: false
+                };
+              } catch (contErr: any) {
+                const mappedContErr = this.mapError(contErr);
+                console.warn(`[LLMGateway] [${requestId}] Continuation failed on '${contId}' (${mappedContErr.message}). Trying next candidate...`);
+                this.recordFailure(contId);
+              }
+            }
+
+            // If continuation was attempted but all continuation candidates failed, move to next primary candidate
+            if (continuationCandidates.length > 0) {
+              console.warn(`[LLMGateway] [${requestId}] All continuation candidates failed for '${providerId}'. Moving to next primary candidate.`);
+              lastGatewayError = new GatewayError('invalid_response', `LLMGateway: Continuation recovery failed for '${providerId}'.`);
+              break; // break retry loop for this provider and fall back to next primary provider in `for (const provider of providers)`
+            }
           }
 
           return {
@@ -243,7 +326,13 @@ export class LLMGateway {
               latency,
               retries: attempt - 1,
               timeoutMs,
-              gatewayVersion: 'v1.1.0'
+              gatewayVersion: 'v1.1.0',
+              initialProvider: providerId,
+              continuationAttempted: false,
+              initialFinishReason: response.finishReason,
+              finalFinishReason: response.finishReason,
+              continuationCount: 0,
+              finalResponseLength: response.text.length
             },
             streamed: false
           };

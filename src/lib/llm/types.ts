@@ -47,6 +47,13 @@ export interface GatewayMetrics {
   retries: number;
   timeoutMs: number;
   gatewayVersion: string;
+  initialProvider?: string;
+  continuationProvider?: string;
+  continuationAttempted?: boolean;
+  initialFinishReason?: string;
+  finalFinishReason?: string;
+  continuationCount?: number;
+  finalResponseLength?: number;
 }
 
 export interface GatewayResponse {

@@ -357,3 +357,159 @@ describe('LLM Gateway Engine Tests', () => {
     expect(callTriggered).toBe(false);
   });
 });
+
+describe('Phase 7.2 Continuation Resilience Tests', () => {
+  let gateway: LLMGateway;
+
+  beforeEach(() => {
+    gateway = new LLMGateway();
+    llmConfig.providers['mock-gemini'] = {
+      model: 'gemini-2.5-flash',
+      temperature: 0.7,
+      maxTokens: 800,
+      timeoutMs: 1000,
+      retryCount: 1,
+      maxTokenLimit: 100000
+    };
+    llmConfig.providers['mock-groq'] = {
+      model: 'llama-3.1-8b-instant',
+      temperature: 0.7,
+      maxTokens: 800,
+      timeoutMs: 1000,
+      retryCount: 1,
+      maxTokenLimit: 100000
+    };
+    llmConfig.providers['mock-openrouter'] = {
+      model: 'openrouter/free',
+      temperature: 0.7,
+      maxTokens: 800,
+      timeoutMs: 1000,
+      retryCount: 1,
+      maxTokenLimit: 100000
+    };
+  });
+
+  it('should return normal uncontinued response when primary provider returns finishReason STOP', async () => {
+    const pkg = getValidPromptPackage();
+
+    const geminiProvider = new MockLLMProvider('mock-gemini', async () => ({
+      text: 'I am here with you and listening warmly.',
+      finishReason: 'stop',
+      promptTokens: 20,
+      completionTokens: 30
+    }));
+
+    (gateway as any).resolver.registerProvider(geminiProvider);
+
+    const res = await gateway.generate({
+      promptPackage: pkg,
+      providerId: 'mock-gemini'
+    });
+
+    expect(res.text).toBe('I am here with you and listening warmly.');
+    expect(res.metrics.continuationAttempted).toBe(false);
+    expect(res.metrics.continuationCount).toBe(0);
+    expect(res.metrics.finishReason).toBe('stop');
+  });
+
+  it('should invoke continuation on fallback provider when primary provider returns finishReason length', async () => {
+    const pkg = getValidPromptPackage();
+
+    const originalDefault = llmConfig.defaultProvider;
+    const originalFallback = llmConfig.fallbackProviders;
+
+    try {
+      llmConfig.defaultProvider = 'mock-gemini';
+      llmConfig.fallbackProviders = ['mock-groq', 'mock-openrouter'];
+
+      let groqInvoked = false;
+      const geminiProvider = new MockLLMProvider('mock-gemini', async () => ({
+        text: 'I can see why this feels overwhelming, and maybe the first thing we can',
+        finishReason: 'length',
+        promptTokens: 20,
+        completionTokens: 250
+      }));
+
+      const groqProvider = new MockLLMProvider('mock-groq', async (req) => {
+        groqInvoked = true;
+        expect(req.promptPackage.sections.some(s => s.id === 'partial_assistant_response')).toBe(true);
+        return {
+          text: 'is make things smaller. We can take one gentle step at a time.',
+          finishReason: 'stop',
+          promptTokens: 40,
+          completionTokens: 30
+        };
+      });
+
+      (gateway as any).resolver.registerProvider(geminiProvider);
+      (gateway as any).resolver.registerProvider(groqProvider);
+
+      const res = await gateway.generate({
+        promptPackage: pkg
+      });
+
+      expect(groqInvoked).toBe(true);
+      expect(res.text).toBe('I can see why this feels overwhelming, and maybe the first thing we can is make things smaller. We can take one gentle step at a time.');
+      expect(res.metrics.continuationAttempted).toBe(true);
+      expect(res.metrics.continuationCount).toBe(1);
+      expect(res.metrics.initialProvider).toBe('mock-gemini');
+      expect(res.metrics.continuationProvider).toBe('mock-groq');
+      expect(res.metrics.initialFinishReason).toBe('length');
+      expect(res.metrics.finalFinishReason).toBe('stop');
+    } finally {
+      llmConfig.defaultProvider = originalDefault;
+      llmConfig.fallbackProviders = originalFallback;
+    }
+  });
+
+  it('should fall back to OpenRouter continuation if Groq continuation fails with an error', async () => {
+    const pkg = getValidPromptPackage();
+
+    const originalDefault = llmConfig.defaultProvider;
+    const originalFallback = llmConfig.fallbackProviders;
+
+    try {
+      llmConfig.defaultProvider = 'mock-gemini';
+      llmConfig.fallbackProviders = ['mock-groq', 'mock-openrouter'];
+
+      const geminiProvider = new MockLLMProvider('mock-gemini', async () => ({
+        text: 'It sounds like you have put a lot of effort into',
+        finishReason: 'length',
+        promptTokens: 20,
+        completionTokens: 250
+      }));
+
+      const groqProvider = new MockLLMProvider('mock-groq', async () => {
+        throw new Error('Groq rate limited 429');
+      });
+
+      let openRouterInvoked = false;
+      const openRouterProvider = new MockLLMProvider('mock-openrouter', async () => {
+        openRouterInvoked = true;
+        return {
+          text: 'this project, and that dedication really matters.',
+          finishReason: 'stop',
+          promptTokens: 50,
+          completionTokens: 20
+        };
+      });
+
+      (gateway as any).resolver.registerProvider(geminiProvider);
+      (gateway as any).resolver.registerProvider(groqProvider);
+      (gateway as any).resolver.registerProvider(openRouterProvider);
+
+      const res = await gateway.generate({
+        promptPackage: pkg
+      });
+
+      expect(openRouterInvoked).toBe(true);
+      expect(res.text).toBe('It sounds like you have put a lot of effort into this project, and that dedication really matters.');
+      expect(res.metrics.continuationProvider).toBe('mock-openrouter');
+      expect(res.metrics.continuationAttempted).toBe(true);
+    } finally {
+      llmConfig.defaultProvider = originalDefault;
+      llmConfig.fallbackProviders = originalFallback;
+    }
+  });
+});
+
