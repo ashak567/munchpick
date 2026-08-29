@@ -20,9 +20,7 @@ const clientEnvSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const serverEnvSchema = clientEnvSchema.extend({
-  GEMINI_API_KEY: z
-    .string()
-    .min(1, 'GEMINI_API_KEY must not be empty'),
+  GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_REASONING_MODEL: z.string().optional(),
   GEMINI_AUXILIARY_MODEL: z.string().optional(),
