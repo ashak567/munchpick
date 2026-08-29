@@ -290,6 +290,24 @@ export default function DashboardPage() {
     const urlChatId = searchParams?.get('chatId')
     fetchChat(urlChatId)
     dispatchConv({ type: 'session_resumed' })
+
+    const supabase = createClient()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setChatId(null)
+        setMessages([])
+        setPossiblePaths([])
+        setVisiblePaths([])
+        setTilMessage(null)
+        setInputValue('')
+      } else if (event === 'SIGNED_IN') {
+        fetchChat()
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   // Ambient Sequence Scheduler tick
@@ -472,21 +490,37 @@ export default function DashboardPage() {
     }
   }
 
-  // Restart / Reset active chat thread
+  // Restart / Reset active chat thread with a clean session
   const handleStartFresh = async () => {
     try {
       setInitializing(true)
       setTilMessage(null)
-      if (chatId) {
-        await fetch('/api/chat/decide', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ selectedPathText: 'Start Fresh' })
-        })
+      setInputValue('')
+
+      const res = await fetch('/api/chats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setChatId(data.chat.id)
+        setCurrentState(data.chat.state || 'Listening')
+        setMessages(data.messages || [])
+
+        const metadata = data.chat.metadata || {}
+        setActiveMascot(metadata.lastMascot || 'munch')
+        setActiveExpression(metadata.lastExpression || 'idle')
+        setActiveTopicKey(metadata.activeTopicKey || 'general')
+        setPossiblePaths([])
+        setVisiblePaths([])
+        router.replace('/dashboard')
+      } else {
+        await fetchChat()
       }
-      await fetchChat()
     } catch (err) {
       console.error('[DashboardChat] Reset failed:', err)
+    } finally {
       setInitializing(false)
     }
   }

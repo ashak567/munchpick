@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { getProfile } from '@/lib/hup/service';
+import { jsonNoStore } from '@/lib/api-headers';
 
 export async function GET() {
   try {
@@ -10,17 +10,17 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       );
     }
 
     const beliefs = await getProfile(user.id);
-    return NextResponse.json({ beliefs });
+    return jsonNoStore({ beliefs });
   } catch (error: any) {
     console.error('GET /api/profile failed:', error);
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     );

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { logout } from '@/app/auth/actions'
+import { clearAssetCache } from '@/lib/assets-client'
 import { 
   LogOut, 
   Mail, 
@@ -188,6 +189,9 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
+      clearAssetCache()
+      const supabase = createClient()
+      await supabase.auth.signOut()
       await logout()
     } catch (err) {
       console.error('Failed to log out', err)

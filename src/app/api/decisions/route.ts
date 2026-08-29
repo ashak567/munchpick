@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { classifyOptions, generateReinforcement, generateReinforcementWithReasoning } from '@/utils/gemini'
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer'
 import { analyzeAndDistillMemories } from '@/lib/memory/distiller'
 import { MunchContextBuilder } from '@/lib/context/builder'
 import { selectNickname } from '@/lib/nickname/service'
+import { jsonNoStore } from '@/lib/api-headers'
 
 // Type definition for preference scores from database
 interface PreferenceRow {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       logStage(currentStage, 'FAILED', { reason: 'No authenticated user' })
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in to create decisions.' },
         { status: 401 }
       )
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     if (!options || !Array.isArray(options) || options.length < 2) {
       logStage(currentStage, 'FAILED', { reason: 'Less than 2 options', options })
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Please provide at least 2 options.' },
         { status: 400 }
       )
@@ -61,14 +62,14 @@ export async function POST(request: NextRequest) {
     for (const opt of options) {
       if (typeof opt !== 'string' || !opt.trim()) {
         logStage(currentStage, 'FAILED', { reason: 'Non-string or empty option', opt })
-        return NextResponse.json(
+        return jsonNoStore(
           { error: 'All options must be non-empty strings.' },
           { status: 400 }
         )
       }
       if (opt.length > 200) {
         logStage(currentStage, 'FAILED', { reason: 'Option over 200 chars', length: opt.length })
-        return NextResponse.json(
+        return jsonNoStore(
           { error: 'Each option must be under 200 characters.' },
           { status: 400 }
         )
@@ -317,7 +318,7 @@ export async function POST(request: NextRequest) {
         error_hint: decisionError.hint,
         error_full: JSON.stringify(decisionError)
       })
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Failed to record decision.', debug_stage: currentStage, debug_error: decisionError.message, debug_code: decisionError.code },
         { status: 500 }
       )
@@ -383,7 +384,7 @@ export async function POST(request: NextRequest) {
     const elapsed = Date.now() - startTime
     logStage(currentStage, 'SUCCESS', { elapsed_ms: elapsed, decision_id: decisionRecord.id })
 
-    return NextResponse.json({
+    return jsonNoStore({
       id: decisionRecord.id,
       category: category,
       selectedOption: {
@@ -410,7 +411,7 @@ export async function POST(request: NextRequest) {
       elapsed_ms: elapsed
     })
     console.error('POST /api/decisions failed with error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       {
         error: error instanceof Error ? error.message : 'An unexpected error occurred.',
         debug_stage: currentStage,
@@ -431,7 +432,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
@@ -452,14 +453,14 @@ export async function GET(request: NextRequest) {
 
     if (decisionsError) {
       console.error('Failed to fetch decisions:', decisionsError)
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Failed to fetch decisions.' },
         { status: 500 }
       )
     }
 
     if (!decisions || decisions.length === 0) {
-      return NextResponse.json({
+      return jsonNoStore({
         decisions: [],
         total: count || 0,
       })
@@ -529,13 +530,13 @@ export async function GET(request: NextRequest) {
       rating: feedbackMap[d.id] || null,
     }))
 
-    return NextResponse.json({
+    return jsonNoStore({
       decisions: mergedDecisions,
       total: count || 0,
     })
   } catch (error: unknown) {
     console.error('GET /api/decisions failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )
@@ -552,7 +553,7 @@ export async function DELETE(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
@@ -563,7 +564,7 @@ export async function DELETE(request: NextRequest) {
     const decisionId = searchParams.get('id')
 
     if (!decisionId) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'id parameter is required.' },
         { status: 400 }
       )
@@ -578,19 +579,19 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) {
       console.error('Failed to delete decision:', deleteError)
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Failed to delete decision.' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       message: 'Decision deleted successfully.',
     })
   } catch (error: unknown) {
     console.error('DELETE /api/decisions failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )

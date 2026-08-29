@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
@@ -6,6 +6,7 @@ import { llmConfig } from '@/lib/llm/config';
 import { selectNickname } from '@/lib/nickname/service';
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer';
 import { analyzeAndDistillMemories } from '@/lib/memory/distiller';
+import { jsonNoStore } from '@/lib/api-headers';
 
 // Initialize Gemini safely
 const getGeminiModel = () => {
@@ -34,24 +35,27 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const { selectedPathText } = await request.json();
     if (!selectedPathText || !selectedPathText.trim()) {
-      return NextResponse.json({ error: 'selectedPathText is required.' }, { status: 400 });
+      return jsonNoStore({ error: 'selectedPathText is required.' }, { status: 400 });
     }
 
     // 1. Fetch active chat
-    const { data: activeChat } = await supabase
+    const { data: activeChats } = await supabase
       .from('chats')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    const activeChat = activeChats && activeChats.length > 0 ? activeChats[0] : null;
 
     if (!activeChat) {
-      return NextResponse.json({ error: 'No active chat session found.' }, { status: 400 });
+      return jsonNoStore({ error: 'No active chat session found.' }, { status: 400 });
     }
 
     const chatMetadata = activeChat.metadata || {};
@@ -148,7 +152,7 @@ Output MUST follow this JSON schema:
 
     if (decisionError) {
       console.error('Failed to create decision record:', decisionError);
-      return NextResponse.json({ error: 'Failed to record decision.' }, { status: 500 });
+      return jsonNoStore({ error: 'Failed to record decision.' }, { status: 500 });
     }
 
     // 6. Insert options records (mapping the possible paths)
@@ -223,13 +227,13 @@ Output MUST follow this JSON schema:
       status: 'pending'
     });
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       decision: decisionRecord,
       reinforcement
     });
   } catch (error: any) {
     console.error('POST /api/chat/decide failed:', error);
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 });
+    return jsonNoStore({ error: error.message || 'Server error.' }, { status: 500 });
   }
 }

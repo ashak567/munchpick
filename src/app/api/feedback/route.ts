@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { calculateNewScore, type FeedbackRating } from '@/utils/preferences'
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer'
 import { analyzeAndDistillMemories } from '@/lib/memory/distiller'
+import { jsonNoStore } from '@/lib/api-headers'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in to submit feedback.' },
         { status: 401 }
       )
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     const { decisionId, rating } = body
 
     if (!decisionId || !rating) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'decisionId and rating are required.' },
         { status: 400 }
       )
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const validRatings: FeedbackRating[] = ['love', 'okay', 'meh']
     if (!validRatings.includes(rating as FeedbackRating)) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Invalid rating. Supported ratings: love, okay, meh.' },
         { status: 400 }
       )
@@ -47,14 +48,14 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (decisionError || !decision) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Decision not found.' },
         { status: 404 }
       )
     }
 
     if (decision.user_id !== user.id) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Access denied. You do not own this decision.' },
         { status: 403 }
       )
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existingFeedback) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Feedback already submitted for this decision.' },
         { status: 409 }
       )
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     if (feedbackError) {
       console.error('Failed to save feedback:', feedbackError)
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Failed to record feedback.' },
         { status: 500 }
       )
@@ -187,13 +188,13 @@ export async function POST(request: NextRequest) {
       ]);
     });
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       feedback: feedbackRecord,
     })
   } catch (error: unknown) {
     console.error('POST /api/feedback failed with error:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )

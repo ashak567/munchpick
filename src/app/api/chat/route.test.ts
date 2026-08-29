@@ -140,6 +140,18 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
+              data: [{
+                id: 'mock-chat-id',
+                state: 'Listening',
+                metadata: {
+                  primaryMascot: 'munch',
+                  lastMascot: 'munch'
+                }
+              }],
+              error: null
+            }),
             maybeSingle: vi.fn().mockResolvedValue({
               data: {
                 id: 'mock-chat-id',
@@ -150,7 +162,8 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
                 }
               },
               error: null
-            })
+            }),
+            update: vi.fn().mockReturnThis()
           };
         }
         if (table === 'chat_messages') {
@@ -217,6 +230,11 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
+              data: [{ id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } }],
+              error: null
+            }),
             maybeSingle: vi.fn().mockResolvedValue({
               data: { id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } },
               error: null
@@ -310,6 +328,11 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
+              data: [{ id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } }],
+              error: null
+            }),
             maybeSingle: vi.fn().mockResolvedValue({
               data: { id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } },
               error: null
@@ -407,6 +430,11 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
+              data: [{ id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } }],
+              error: null
+            }),
             maybeSingle: vi.fn().mockResolvedValue({
               data: { id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch', lastMascot: 'munch' } },
               error: null
@@ -503,6 +531,11 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue({
+              data: [{ id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch' } }],
+              error: null
+            }),
             maybeSingle: vi.fn().mockResolvedValue({
               data: { id: 'mock-chat-id', state: 'Listening', metadata: { primaryMascot: 'munch' } },
               error: null

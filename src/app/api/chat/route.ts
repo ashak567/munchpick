@@ -31,6 +31,7 @@ import { EmotionDynamicsEngine } from '@/lib/emotion/dynamics';
 import { LLMGateway } from '@/lib/llm/gateway';
 import { ResponseValidator } from '@/lib/validation/validator';
 import { ResponseExpressionEngine } from '@/lib/expression/engine';
+import { jsonNoStore } from '@/lib/api-headers';
 
 function stripPromptContent(pkg?: PromptPackage) {
   if (!pkg) return undefined;
@@ -151,7 +152,7 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const url = new URL(request.url);
@@ -168,15 +169,16 @@ export async function GET(request: NextRequest) {
       activeChat = data;
     }
 
-    // Fallback to active chat if not found or not specified
+    // Fallback to active chat if not found or not specified (deterministically pick latest updated)
     if (!activeChat) {
-      const { data } = await supabase
+      const { data: activeChats } = await supabase
         .from('chats')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'active')
-        .maybeSingle();
-      activeChat = data;
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      activeChat = activeChats && activeChats.length > 0 ? activeChats[0] : null;
     }
 
     // 2. If no active chat, initialize one
@@ -228,13 +230,13 @@ export async function GET(request: NextRequest) {
       .eq('chat_id', activeChat.id)
       .order('created_at', { ascending: true });
 
-    return NextResponse.json({
+    return jsonNoStore({
       chat: activeChat,
       messages: messages || []
     });
   } catch (error: any) {
     console.error('GET /api/chat failed:', error);
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 });
+    return jsonNoStore({ error: error.message || 'Server error.' }, { status: 500 });
   }
 }
 
@@ -253,21 +255,24 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const { content, draftId } = await request.json();
     if (!content || !content.trim()) {
-      return NextResponse.json({ error: 'Content cannot be empty.' }, { status: 400 });
+      return jsonNoStore({ error: 'Content cannot be empty.' }, { status: 400 });
     }
 
-    // 1. Retrieve active chat
-    const { data: activeChatData } = await supabase
+    // 1. Retrieve active chat (deterministically pick latest updated)
+    const { data: activeChats } = await supabase
       .from('chats')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    const activeChatData = activeChats && activeChats.length > 0 ? activeChats[0] : null;
 
     if (!activeChatData) {
       // Create new chat
@@ -279,7 +284,7 @@ export async function POST(request: NextRequest) {
 
       const prefMascot = profile?.preferred_mascot || 'munch';
 
-      const { data: newChat } = await supabase
+      const { data: newChat, error: newChatErr } = await supabase
         .from('chats')
         .insert({
           user_id: user.id,
@@ -296,6 +301,8 @@ export async function POST(request: NextRequest) {
         })
         .select()
         .single();
+
+      if (newChatErr) throw newChatErr;
       activeChat = newChat;
     } else {
       activeChat = activeChatData;
@@ -474,7 +481,8 @@ export async function POST(request: NextRequest) {
     let traceToUse = initialTrace;
 
     if (draftId) {
-      const cached = SPECULATIVE_CACHE.get(draftId);
+      const draftKey = `${user.id}:${draftId}`;
+      const cached = SPECULATIVE_CACHE.get(draftKey);
       if (cached && cached.pipelineVersion === PIPELINE_VERSION) {
         const invalidatedEngines = resolveInvalidatedEngines(cached.draft, content);
         
@@ -485,7 +493,7 @@ export async function POST(request: NextRequest) {
         traceToUse = cachedTrace;
         activePipeline = pipeline.filter(engine => invalidatedEngines.has(engine.name));
       }
-      SPECULATIVE_CACHE.delete(draftId);
+      SPECULATIVE_CACHE.delete(draftKey);
     }
 
     finalTrace = await runCognitivePipeline(activePipeline, traceToUse, context);
@@ -641,7 +649,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    // Opaque Request / Response Correlation Logging
+    const requestId = gatewayResponse.requestId || crypto.randomUUID();
+    console.log(`[API /api/chat] [${requestId}] User: ${user.id.slice(0, 8)}... Chat: ${activeChat.id} Provider: ${gatewayResponse.metrics?.providerId || 'unknown'} Model: ${gatewayResponse.metrics?.modelId || 'unknown'} ValidationPassed: ${validationResult.passed} Retries: ${retryAttempt}`);
+
+    return jsonNoStore({
       message: mascotMessage,
       userMessage,
       state: finalTrace.state,
@@ -681,7 +693,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[POST /api/chat] Critical error in chat lifecycle:', error);
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error.message || 'Critical server error in chat lifecycle.' },
       { status: 500 }
     );

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { jsonNoStore } from '@/lib/api-headers'
 
 // PUT update a journal entry
 export async function PUT(
@@ -11,14 +12,14 @@ export async function PUT(
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 })
     }
 
     const { id } = await params
     const { title, content } = await request.json()
 
     if (!title?.trim() || !content?.trim()) {
-      return NextResponse.json({ error: 'Title and content are required.' }, { status: 400 })
+      return jsonNoStore({ error: 'Title and content are required.' }, { status: 400 })
     }
 
     const { data: entry, error } = await supabase
@@ -35,10 +36,10 @@ export async function PUT(
 
     if (error) throw error
 
-    return NextResponse.json({ entry })
+    return jsonNoStore({ entry })
   } catch (error: any) {
     console.error('PUT /api/journal/[id] failed:', error)
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 })
+    return jsonNoStore({ error: error.message || 'Server error.' }, { status: 500 })
   }
 }
 
@@ -52,7 +53,7 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 })
     }
 
     const { id } = await params
@@ -65,9 +66,9 @@ export async function DELETE(
 
     if (error) throw error
 
-    return NextResponse.json({ success: true })
+    return jsonNoStore({ success: true })
   } catch (error: any) {
     console.error('DELETE /api/journal/[id] failed:', error)
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 })
+    return jsonNoStore({ error: error.message || 'Server error.' }, { status: 500 })
   }
 }

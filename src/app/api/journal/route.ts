@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { serverEnv } from '@/lib/env'
 import { llmConfig } from '@/lib/llm/config'
+import { jsonNoStore } from '@/lib/api-headers'
 
 const getGeminiModel = () => {
   const apiKey = serverEnv.GEMINI_API_KEY || ''
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 })
     }
 
     const { data: entries, error } = await supabase
@@ -35,10 +36,10 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json({ entries: entries || [] })
+    return jsonNoStore({ entries: entries || [] })
   } catch (error: any) {
     console.error('GET /api/journal failed:', error)
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 })
+    return jsonNoStore({ error: error.message || 'Server error.' }, { status: 500 })
   }
 }
 
@@ -49,12 +50,12 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 })
     }
 
     const { title, content } = await request.json()
     if (!title?.trim() || !content?.trim()) {
-      return NextResponse.json({ error: 'Title and content are required.' }, { status: 400 })
+      return jsonNoStore({ error: 'Title and content are required.' }, { status: 400 })
     }
 
     // 1. Get preferred mascot from user profile
@@ -109,9 +110,9 @@ Write a short, warm, and highly validating reflection (1-3 sentences) on what th
 
     if (error) throw error
 
-    return NextResponse.json({ entry })
+    return jsonNoStore({ entry })
   } catch (error: any) {
     console.error('POST /api/journal failed:', error)
-    return NextResponse.json({ error: error.message || 'Server error.' }, { status: 500 })
+    return jsonNoStore({ error: error.message || 'Server error.' }, { status: 500 })
   }
 }

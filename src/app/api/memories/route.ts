@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { jsonNoStore } from '@/lib/api-headers';
 
 export async function GET() {
   try {
@@ -9,13 +9,13 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       );
     }
 
-    // Retrieve memories ordered by relevance and recency
+    // Retrieve memories strictly owned by user.id
     const { data: memories, error } = await supabase
       .from('user_memories')
       .select('*')
@@ -28,10 +28,10 @@ export async function GET() {
       throw error;
     }
 
-    return NextResponse.json({ memories: memories || [] });
+    return jsonNoStore({ memories: memories || [] });
   } catch (error: any) {
     console.error('GET /api/memories failed:', error);
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     );

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { getWelcomeState, markEnvelopeAsRead } from '@/lib/envelope/service'
+import { jsonNoStore } from '@/lib/api-headers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,19 +13,19 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
     }
 
-    // 2. Fetch current welcome state
+    // 2. Fetch current welcome state strictly for authenticated user.id
     const state = await getWelcomeState(user.id)
 
-    return NextResponse.json(state)
+    return jsonNoStore(state)
   } catch (error: unknown) {
     console.error('GET /api/envelope/current failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
@@ -52,19 +53,19 @@ export async function POST(request: NextRequest) {
     const { letterId } = body
 
     if (!letterId) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'letterId is required.' },
         { status: 400 }
       )
     }
 
-    // 3. Mark letter as read
+    // 3. Mark letter as read for authenticated user.id
     await markEnvelopeAsRead(user.id, letterId)
 
-    return NextResponse.json({ success: true })
+    return jsonNoStore({ success: true })
   } catch (error: unknown) {
     console.error('POST /api/envelope/current failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )

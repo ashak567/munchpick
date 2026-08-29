@@ -1,39 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { CognitiveTrace, ContextPackage } from '@/lib/reflection/types';
-import { runCognitivePipeline, NluEnginePlugin, EmotionEnginePlugin, EmotionalStateEngine, EmotionRegulationEngine, EmotionDynamicsEngine, StoryEngine, StoryEventsEngine, StoryProgressEngine, StoryIntelligenceEngine, MemoryConsolidationEngine, CognitiveOrchestratorEngine, PersonalityEngine } from '@/lib/reflection/engine';
-import { SPECULATIVE_CACHE, ACTIVE_CONTROLLERS, PIPELINE_VERSION, ENGINE_VERSIONS, evaluatePredictionConfidence, generateFingerprints, setSpeculativeState, normalizeText } from '@/lib/reflection/speculative';
+import {
+  runCognitivePipeline,
+  NluEnginePlugin,
+  EmotionEnginePlugin,
+  EmotionalStateEngine,
+  EmotionRegulationEngine,
+  EmotionDynamicsEngine,
+  StoryEngine,
+  StoryEventsEngine,
+  StoryProgressEngine,
+  StoryIntelligenceEngine,
+  MemoryConsolidationEngine,
+  CognitiveOrchestratorEngine,
+  PersonalityEngine
+} from '@/lib/reflection/engine';
+import {
+  SPECULATIVE_CACHE,
+  ACTIVE_CONTROLLERS,
+  PIPELINE_VERSION,
+  ENGINE_VERSIONS,
+  evaluatePredictionConfidence,
+  generateFingerprints,
+  setSpeculativeState,
+  normalizeText
+} from '@/lib/reflection/speculative';
+import { jsonNoStore } from '@/lib/api-headers';
 
 export async function POST(request: NextRequest) {
   let controller: AbortController | null = null;
-  let draftId: string | null = null;
+  let draftKey: string | null = null;
 
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const { draftId: reqDraftId, chatId, partialText } = await request.json();
-    draftId = reqDraftId;
 
-    if (!draftId || !chatId || typeof partialText !== 'string') {
-      return NextResponse.json({ error: 'Missing required parameters.' }, { status: 400 });
+    if (!reqDraftId || !chatId || typeof partialText !== 'string') {
+      return jsonNoStore({ error: 'Missing required parameters.' }, { status: 400 });
     }
+
+    // Namespace speculative key by user ID to prevent any cross-user draft collisions
+    draftKey = `${user.id}:${reqDraftId}`;
 
     // 1. Cancellation Token Management
     controller = new AbortController();
-    const previousController = ACTIVE_CONTROLLERS.get(draftId);
+    const previousController = ACTIVE_CONTROLLERS.get(draftKey);
     if (previousController) {
       previousController.abort();
     }
-    ACTIVE_CONTROLLERS.set(draftId, controller);
+    ACTIVE_CONTROLLERS.set(draftKey, controller);
 
     const confidence = evaluatePredictionConfidence(partialText);
 
-    // 2. Fetch Active Chat from DB to load previous state
+    // 2. Fetch Active Chat from DB to load previous state - strictly owned by user.id
     const { data: chatData } = await supabase
       .from('chats')
       .select('*')
@@ -42,7 +68,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (!chatData) {
-      return NextResponse.json({ error: 'Chat not found.' }, { status: 404 });
+      return jsonNoStore({ error: 'Chat not found.' }, { status: 404 });
     }
 
     // Fetch last mascot message for nlu_metadata
@@ -141,15 +167,15 @@ export async function POST(request: NextRequest) {
     let currentTrace = { ...initialTrace };
     for (const engine of pipeline) {
       if (controller.signal.aborted) {
-        return NextResponse.json({ error: 'Speculative computation aborted.' }, { status: 499 });
+        return jsonNoStore({ error: 'Speculative computation aborted.' }, { status: 499 });
       }
       currentTrace = await engine.execute(currentTrace, context);
     }
 
     // 4. Cache final state if confidence gate is met
-    if (confidence >= 0.35 && !controller.signal.aborted) {
+    if (confidence >= 0.35 && !controller.signal.aborted && draftKey) {
       const fingerprints = generateFingerprints(currentTrace);
-      setSpeculativeState(draftId, {
+      setSpeculativeState(draftKey, {
         draft: partialText,
         normalizedDraft: normalizeText(partialText),
         pipelineVersion: PIPELINE_VERSION,
@@ -163,11 +189,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Clean active controller mapping
-    if (ACTIVE_CONTROLLERS.get(draftId) === controller) {
-      ACTIVE_CONTROLLERS.delete(draftId);
+    if (draftKey && ACTIVE_CONTROLLERS.get(draftKey) === controller) {
+      ACTIVE_CONTROLLERS.delete(draftKey);
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       predictionConfidence: confidence,
       predictedEmotion: currentTrace.emotions,
@@ -177,30 +203,38 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     if (error.message === 'Speculative computation aborted.') {
-      return NextResponse.json({ error: 'Speculative computation aborted.' }, { status: 499 });
+      return jsonNoStore({ error: 'Speculative computation aborted.' }, { status: 499 });
     }
     console.error('[POST /api/chat/speculative] Error running speculative engine:', error);
-    return NextResponse.json({ error: 'Internal speculative error.' }, { status: 500 });
+    return jsonNoStore({ error: 'Internal speculative error.' }, { status: 500 });
   } finally {
-    if (draftId && ACTIVE_CONTROLLERS.get(draftId) === controller) {
-      ACTIVE_CONTROLLERS.delete(draftId);
+    if (draftKey && ACTIVE_CONTROLLERS.get(draftKey) === controller) {
+      ACTIVE_CONTROLLERS.delete(draftKey);
     }
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
+    }
+
     const { draftId } = await request.json();
     if (draftId) {
-      SPECULATIVE_CACHE.delete(draftId);
-      const controller = ACTIVE_CONTROLLERS.get(draftId);
+      const draftKey = `${user.id}:${draftId}`;
+      SPECULATIVE_CACHE.delete(draftKey);
+      const controller = ACTIVE_CONTROLLERS.get(draftKey);
       if (controller) {
         controller.abort();
-        ACTIVE_CONTROLLERS.delete(draftId);
+        ACTIVE_CONTROLLERS.delete(draftKey);
       }
     }
-    return NextResponse.json({ success: true });
+    return jsonNoStore({ success: true });
   } catch {
-    return NextResponse.json({ success: false }, { status: 400 });
+    return jsonNoStore({ success: false }, { status: 400 });
   }
 }

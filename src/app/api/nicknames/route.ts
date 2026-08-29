@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { updateNicknameAffinity, getRelationshipState } from '@/lib/nickname/service'
+import { jsonNoStore } from '@/lib/api-headers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,13 +13,13 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
     }
 
-    // 2. Fetch nickname affinities
+    // 2. Fetch nickname affinities strictly for authenticated user.id
     const { data: affinities, error: fetchError } = await supabase
       .from('nickname_affinity')
       .select('id, nickname, times_used, comfort_score, user_reaction, is_active, last_used_at')
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     if (fetchError) {
       console.error('Failed to fetch nickname affinities:', fetchError);
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Failed to fetch nickname affinities.' },
         { status: 500 }
       )
@@ -36,13 +37,13 @@ export async function GET(request: NextRequest) {
     // 3. Fetch current relationship state
     const relationship = await getRelationshipState(user.id);
 
-    return NextResponse.json({
+    return jsonNoStore({
       affinities: affinities || [],
       relationship
     })
   } catch (error: unknown) {
     console.error('GET /api/nicknames failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     const { nickname, reaction } = body
 
     if (!nickname || !reaction) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Nickname and reaction are required.' },
         { status: 400 }
       )
@@ -78,21 +79,21 @@ export async function POST(request: NextRequest) {
 
     const validReactions = ['love', 'okay', 'dislike']
     if (!validReactions.includes(reaction)) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Invalid reaction. Supported reactions: love, okay, dislike.' },
         { status: 400 }
       )
     }
 
-    // 3. Update affinity in database
+    // 3. Update affinity in database for user.id
     await updateNicknameAffinity(user.id, nickname, reaction)
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true
     })
   } catch (error: unknown) {
     console.error('POST /api/nicknames/react failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )

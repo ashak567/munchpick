@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { jsonNoStore } from '@/lib/api-headers'
 
 export async function GET() {
   try {
@@ -11,7 +11,7 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       )
@@ -97,7 +97,7 @@ export async function GET() {
       console.error('Failed to fetch preferences:', prefError)
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       totalDecisions,
       categoryDistribution,
       satisfactionBreakdown,
@@ -107,7 +107,7 @@ export async function GET() {
     })
   } catch (error: unknown) {
     console.error('GET /api/preferences failed:', error)
-    return NextResponse.json(
+    return jsonNoStore(
       { error: error instanceof Error ? error.message : 'An unexpected error occurred.' },
       { status: 500 }
     )
