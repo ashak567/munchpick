@@ -21,6 +21,7 @@ import { CompanionPresenceBuilder } from '@/components/companion/CompanionPresen
 import { PresenceExperienceManager } from '@/components/companion/PresenceExperienceManager'
 import { InteractionCoordinator } from '@/components/companion/InteractionCoordinator'
 import { MOTION_SYSTEM_VARIANTS } from '@/components/workspace/motion-system'
+import { useWelcome } from '@/lib/envelope/WelcomeContext'
 
 interface ChatMessage {
   id: string
@@ -172,8 +173,11 @@ function generateDynamicGreeting(
 
 export default function DashboardPage() {
   const router = useRouter()
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isNearBottomRef = useRef(true)
+  const userScrolledUpRef = useRef(false)
 
   // Chat states
   const [chatId, setChatId] = useState<string | null>(null)
@@ -189,6 +193,7 @@ export default function DashboardPage() {
   // This is the single source of truth for mascot expression, attention,
   // typing indicators, animations, and reading state.
   const { output: convOutput, dispatch: dispatchConv } = useConversationPresence()
+  const { refresh: refreshEnvelope } = useWelcome()
 
   const layout = useResponsiveLayout()
   const experienceManagerRef = useRef<PresenceExperienceManager | null>(null)
@@ -333,18 +338,33 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [activeMascot, convOutput.state])
 
-  // Auto-scroll to bottom of messages
+  // Track internal container scroll to detect manual user scrolling
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+    const nearBottom = distanceFromBottom < 120
+    isNearBottomRef.current = nearBottom
+    userScrolledUpRef.current = !nearBottom
+  }
+
+  // Isolated internal auto-scroll that never triggers document/window viewport shifts
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior, block: 'end' })
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior
+      })
     }
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      scrollToBottom(messages.length <= 1 ? 'auto' : 'smooth')
-    }, 60)
-    return () => clearTimeout(timer)
+    if (isNearBottomRef.current || !userScrolledUpRef.current) {
+      const timer = setTimeout(() => {
+        scrollToBottom(messages.length <= 1 ? 'auto' : 'smooth')
+      }, 50)
+      return () => clearTimeout(timer)
+    }
   }, [messages, loading, convOutput.showTypingIndicator, currentState, visiblePaths, shuffling])
 
   // Auto-expand textarea (configurable height)
@@ -394,6 +414,9 @@ export default function DashboardPage() {
     setMessages(prev => [...prev, tempUserMsg])
     setInputValue('')
     setLoading(true)
+    userScrolledUpRef.current = false
+    isNearBottomRef.current = true
+    setTimeout(() => scrollToBottom('smooth'), 20)
     dispatchConv({ type: 'message_submitted' })
 
     try {
@@ -463,8 +486,9 @@ export default function DashboardPage() {
       setSelectedPathText(null)
       setCurrentState('Archived')
 
-      // Reload chat
+      // Reload chat and check for fresh envelope/milestone letters
       await fetchChat()
+      refreshEnvelope().catch(() => {})
 
       // Occasionally show TIL
       const checkTIL = async () => {
@@ -515,8 +539,10 @@ export default function DashboardPage() {
         setPossiblePaths([])
         setVisiblePaths([])
         router.replace('/dashboard')
+        refreshEnvelope().catch(() => {})
       } else {
         await fetchChat()
+        refreshEnvelope().catch(() => {})
       }
     } catch (err) {
       console.error('[DashboardChat] Reset failed:', err)
@@ -545,19 +571,15 @@ export default function DashboardPage() {
   return (
     <EnvironmentRenderer theme={activeTheme}>
       <div 
-        className="flex flex-col w-full h-full relative px-3 sm:px-4 mx-auto overflow-hidden min-h-0"
+        className="flex flex-col w-full h-full relative px-2 sm:px-4 mx-auto overflow-hidden min-h-0 flex-1"
         style={{ 
           maxWidth: `${layout.chatWidth}px`, 
-          paddingBottom: layout.isMobile
-            ? (layout.keyboardHeight 
-                ? `${layout.keyboardHeight + 8}px` 
-                : 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 24px)')
-            : '8px',
-          paddingTop: '8px'
+          paddingBottom: layout.isMobile && layout.keyboardHeight ? `${layout.keyboardHeight + 4}px` : '4px',
+          paddingTop: '6px'
         }}
       >
         {/* Companion Header Profile */}
-        <header className="sticky top-0 z-20 backdrop-blur-md bg-white/75 border border-white/80 shadow-3xs rounded-2xl px-4 py-2.5 mb-2 flex items-center justify-between flex-shrink-0">
+        <header className="z-20 backdrop-blur-md bg-white/80 border border-white/85 shadow-3xs rounded-2xl px-3 sm:px-4 py-2 mb-1.5 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative">
               <CompanionStage 
@@ -602,7 +624,11 @@ export default function DashboardPage() {
         </header>
 
         {/* Main Viewport Container */}
-        <main className="flex-1 min-h-0 overflow-y-auto px-1 sm:px-2 pt-2 pb-4 space-y-5 scrollbar-thin overscroll-contain">
+        <main 
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 min-h-0 overflow-y-auto px-1 sm:px-2 pt-1 pb-3 space-y-4 scrollbar-thin overscroll-contain"
+        >
           <AnimatePresence initial={false}>
             {isChatEmpty ? (
               /* Welcome / Elegant Empty State Card */
@@ -822,8 +848,8 @@ export default function DashboardPage() {
         </main>
 
         {/* Input Composer Panel */}
-        <footer className="w-full pt-1 pb-2 z-20 flex-shrink-0">
-          <div className="bg-white/85 border border-white/95 rounded-2xl p-2.5 flex items-end gap-2.5 shadow-md backdrop-blur-md focus-within:shadow-lg focus-within:border-primary/50 transition-all">
+        <footer className="w-full pt-1 pb-1 z-20 flex-shrink-0">
+          <div className="bg-white/90 border border-white/95 rounded-2xl p-2 sm:p-2.5 flex items-end gap-2 shadow-md backdrop-blur-md focus-within:shadow-lg focus-within:border-primary/50 transition-all">
             <textarea
               ref={textareaRef}
               rows={1}

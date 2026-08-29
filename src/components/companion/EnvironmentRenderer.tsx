@@ -57,10 +57,7 @@ export default function EnvironmentRenderer({ theme, children }: EnvironmentRend
 
   return (
     <div 
-      className={`relative w-full h-full flex flex-col overflow-hidden bg-gradient-to-br ${getThemeGradient()} transition-colors duration-1000 z-0`}
-      style={{
-        contentVisibility: 'auto'
-      }}
+      className={`relative w-full h-full flex flex-col overflow-hidden bg-gradient-to-br ${getThemeGradient()} transition-colors duration-1000 z-0 min-h-0`}
     >
       {/* Dynamic Ambient Blur Nodes */}
       {!isReduced && (
