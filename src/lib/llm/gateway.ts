@@ -226,6 +226,10 @@ export class LLMGateway {
           const latency = Date.now() - startTime;
           this.recordSuccess(providerId, latency);
 
+          if (response.finishReason === 'length') {
+            console.warn(`[LLMGateway] [${requestId}] Warning: Provider '${providerId}' returned response with finishReason='length' (possible truncation).`);
+          }
+
           return {
             requestId,
             text: response.text,

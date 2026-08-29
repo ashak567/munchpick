@@ -31,7 +31,7 @@ export const llmConfig: LLMConfig = {
       reasoningModel: serverEnv?.GEMINI_REASONING_MODEL || 'gemini-2.5-flash',
       auxiliaryModel: serverEnv?.GEMINI_AUXILIARY_MODEL || 'gemini-3.1-flash-lite',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 5000,
       retryCount: 3,
       maxTokenLimit: 1048576
@@ -39,7 +39,7 @@ export const llmConfig: LLMConfig = {
     groq: {
       model: serverEnv?.GROQ_MODEL || 'llama-3.1-8b-instant',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 5000,
       retryCount: 2,
       maxTokenLimit: 131072
@@ -47,7 +47,7 @@ export const llmConfig: LLMConfig = {
     openrouter: {
       model: serverEnv?.OPENROUTER_MODEL || 'openrouter/free',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 7000,
       retryCount: 1,
       maxTokenLimit: 131072
@@ -57,7 +57,7 @@ export const llmConfig: LLMConfig = {
       reasoningModel: serverEnv?.ANTHROPIC_REASONING_MODEL || 'claude-3-7-sonnet-20250219',
       auxiliaryModel: serverEnv?.ANTHROPIC_AUXILIARY_MODEL || 'claude-3-5-haiku-20241022',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 5000,
       retryCount: 3,
       maxTokenLimit: 200000
@@ -67,7 +67,7 @@ export const llmConfig: LLMConfig = {
       reasoningModel: serverEnv?.ANTHROPIC_REASONING_MODEL || 'claude-3-7-sonnet-20250219',
       auxiliaryModel: serverEnv?.ANTHROPIC_AUXILIARY_MODEL || 'claude-3-5-haiku-20241022',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 5000,
       retryCount: 3,
       maxTokenLimit: 200000
@@ -77,7 +77,7 @@ export const llmConfig: LLMConfig = {
       reasoningModel: 'o1-mini',
       auxiliaryModel: 'gpt-4o-mini',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 5000,
       retryCount: 3,
       maxTokenLimit: 128000
@@ -87,7 +87,7 @@ export const llmConfig: LLMConfig = {
       reasoningModel: 'deepseek-reasoner',
       auxiliaryModel: 'deepseek-chat',
       temperature: 0.7,
-      maxTokens: 250,
+      maxTokens: 800,
       timeoutMs: 5000,
       retryCount: 3,
       maxTokenLimit: 64000

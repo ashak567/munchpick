@@ -65,9 +65,14 @@ export class OpenAICompatibleProviderAdapter implements LLMProvider {
       throw new Error(`${this.id} returned an invalid empty response.`);
     }
 
+    const finishReason = data.choices?.[0]?.finish_reason || 'stop';
+    if (finishReason === 'length') {
+      console.warn(`[OpenAICompatibleAdapter:${this.id}] Warning: response reached token length limit.`);
+    }
+
     return {
       text,
-      finishReason: data.choices?.[0]?.finish_reason || 'stop',
+      finishReason,
       promptTokens: data.usage?.prompt_tokens || Math.ceil(promptText.length / 4),
       completionTokens: data.usage?.completion_tokens || Math.ceil(text.length / 4)
     };

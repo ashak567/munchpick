@@ -30,7 +30,7 @@ export class AnthropicProviderAdapter implements LLMProvider {
     );
 
     const promptText = PromptRenderer.renderToText(request.promptPackage);
-    const maxTokens = request.maxTokens ?? config?.maxTokens ?? 250;
+    const maxTokens = request.maxTokens ?? config?.maxTokens ?? 800;
     const temperature = request.temperature ?? config?.temperature ?? 0.7;
 
     const startTime = Date.now();
@@ -79,9 +79,15 @@ export class AnthropicProviderAdapter implements LLMProvider {
       .join('')
       .trim();
 
-    const stopReason = data.stop_reason === 'end_turn' || data.stop_reason === 'stop_sequence'
-      ? 'stop'
-      : (data.stop_reason || 'stop');
+    let stopReason: 'stop' | 'length' | 'content_filter' | 'other' = 'stop';
+    if (data.stop_reason === 'max_tokens') {
+      stopReason = 'length';
+      console.warn(`[AnthropicAdapter] Warning: response reached token length limit.`);
+    } else if (data.stop_reason === 'end_turn' || data.stop_reason === 'stop_sequence') {
+      stopReason = 'stop';
+    } else if (data.stop_reason) {
+      stopReason = 'other';
+    }
 
     return {
       text,
@@ -105,7 +111,7 @@ export class AnthropicProviderAdapter implements LLMProvider {
     );
 
     const promptText = PromptRenderer.renderToText(request.promptPackage);
-    const maxTokens = request.maxTokens ?? config?.maxTokens ?? 250;
+    const maxTokens = request.maxTokens ?? config?.maxTokens ?? 800;
     const temperature = request.temperature ?? config?.temperature ?? 0.7;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {

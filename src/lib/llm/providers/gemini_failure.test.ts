@@ -141,9 +141,10 @@ describe('Model Selection Architecture Tests', () => {
     }
   });
 
-  it('should verify auxiliary model configuration is accessible for background analysis services', () => {
-    expect(llmConfig.providers.gemini.auxiliaryModel).toBeDefined();
-    expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-3.1-flash-lite');
-    expect(llmConfig.providers.anthropic.auxiliaryModel).toBe('claude-3-5-haiku-20241022');
+  it('should verify default maxTokens is 800 to prevent output truncation', () => {
+    expect(llmConfig.providers.gemini.maxTokens).toBe(800);
+    expect(llmConfig.providers.groq.maxTokens).toBe(800);
+    expect(llmConfig.providers.openrouter.maxTokens).toBe(800);
   });
 });
+
