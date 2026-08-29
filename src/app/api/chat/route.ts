@@ -424,6 +424,8 @@ export async function POST(request: NextRequest) {
     context.previousMemoryState = previousMemoryState;
     context.previousCognitiveDecision = previousCognitiveDecision;
     context.previousPersonalityDecision = previousPersonalityDecision;
+    // Provide prior assistant responses to PromptBuilderEngine for the hard anti-repetition guard
+    context.previousAssistantResponses = previousAssistantResponses;
 
     // 6. Initialize pipeline trace
     const initialTrace: CognitiveTrace = {

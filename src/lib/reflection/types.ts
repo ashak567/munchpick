@@ -62,7 +62,8 @@ export type PromptSectionType =
   | "memory"
   | "conversation"
   | "instructions"
-  | "response_plan";
+  | "response_plan"
+  | "forbidden_responses";
 
 export interface PromptSection {
   id: string;
@@ -303,8 +304,16 @@ export interface ContextPackage {
   };
   uncertainties?: any[];
   chatHistory?: any[];
+  /**
+   * Most recent assistant responses from the current conversation session.
+   * Populated by the API route and used by PromptBuilderEngine to inject
+   * a hard FORBIDDEN_PREVIOUS_RESPONSES section into the prompt, preventing
+   * exact or near-exact repetition at the LLM level.
+   */
+  previousAssistantResponses?: string[];
   [key: string]: any;
 }
+
 
 export interface CognitiveEngine {
   name: string;

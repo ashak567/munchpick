@@ -50,6 +50,16 @@ export class PromptRenderer {
         } else {
           content = JSON.stringify(section.content, null, 2);
         }
+      } else if (section.id === 'forbidden_previous_responses' && typeof section.content === 'object' && section.content !== null) {
+        const forbiddenContent = section.content as any;
+        const instruction = forbiddenContent.instruction || 'Do not reproduce any response listed below.';
+        const responses: string[] = Array.isArray(forbiddenContent.responses) ? forbiddenContent.responses : [];
+        if (responses.length === 0) {
+          content = instruction;
+        } else {
+          const numbered = responses.map((r: string, i: number) => `${i + 1}. "${r.trim()}"`);
+          content = `${instruction}\n\n${numbered.join('\n')}`;
+        }
       } else {
         content = typeof section.content === 'string'
           ? section.content

@@ -161,7 +161,7 @@ export class StoryIntelligenceEngine implements CognitiveEngine {
         triggeredRuleTitles.add(rule.title);
         
         // Find existing pattern
-        let patternIdx = recurringPatterns.findIndex(p => p.category === rule.category && p.title === rule.title);
+        const patternIdx = recurringPatterns.findIndex(p => p.category === rule.category && p.title === rule.title);
         if (patternIdx !== -1) {
           const p = recurringPatterns[patternIdx];
           p.occurrences += 1;

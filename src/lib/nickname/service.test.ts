@@ -13,7 +13,7 @@ let mockDecisionsData: any[] = [];
 let mockMemoriesData: any[] = [];
 let mockBeliefsData: any[] = [];
 let mockAffinitiesData: any[] = [];
-let mockUserData = { id: 'user_123', name: 'Ash' };
+const mockUserData = { id: 'user_123', name: 'Ash' };
 
 let upsertedAffinities: any[] = [];
 let updatedAffinityPayload: any = null;

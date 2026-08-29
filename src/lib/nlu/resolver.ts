@@ -182,7 +182,7 @@ export function evaluateEvolutionAndStability(
   });
 
   observations.meanings = observations.meanings.map(m => {
-    let updatedPossibleMeanings = m.possible_meanings.map(pm => {
+    const updatedPossibleMeanings = m.possible_meanings.map(pm => {
       const pastWeightedScore = pastMeaningScores.get(pm.interpretation) || 0;
       if (pastWeightedScore >= 0.5) { // Needs at least one reasonably recent occurrence
         return {

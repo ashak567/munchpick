@@ -28,6 +28,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
+  // For all API requests (non-GET methods or /api/* paths), always go direct to network.
+  // This prevents any possibility of a cached POST /api/chat response being returned.
+  if (request.method !== 'GET' || new URL(request.url).pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // For navigation / HTML requests, always use Network-First to guarantee fresh application shells
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(

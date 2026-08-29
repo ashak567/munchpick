@@ -314,7 +314,7 @@ export class NluEnginePlugin implements CognitiveEngine {
     const extractedPaths = await extractPathsFromText(context.user_input, historyStrings);
 
     // 5. Progressive Path Evolution: merge new paths with accumulated paths in metadata
-    let currentPaths = [...(trace.generatedPaths || [])];
+    const currentPaths = [...(trace.generatedPaths || [])];
     if (extractedPaths.length > 0) {
       // Avoid duplicate paths
       extractedPaths.forEach(newP => {
@@ -511,7 +511,7 @@ export class ReflectionEngine implements CognitiveEngine {
         if (dominantEmotion) {
           let insight = '';
           let guidance = '';
-          let confidence = emotionalState ? emotionalState.confidence : 0.8;
+          const confidence = emotionalState ? emotionalState.confidence : 0.8;
 
           if (dominantEmotion === 'tired' || dominantEmotion === 'exhausted') {
             insight = "User physical or cognitive energy appears depleted.";
@@ -707,7 +707,7 @@ export class ReflectionEngine implements CognitiveEngine {
       const need = trace.cognitiveDecision.dominantNeed;
       let insight = '';
       let guidance = '';
-      let observation = `Orchestrator dominant need is "${need}".`;
+      const observation = `Orchestrator dominant need is "${need}".`;
 
       if (need === 'comfort') {
         insight = "User's primary cognitive need is emotional comfort and validation.";

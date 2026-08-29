@@ -97,7 +97,7 @@ export class RepetitionTransformer implements TransformerPlugin {
 
     for (let i = 0; i < sentences.length; i++) {
       let current = sentences[i];
-      let prev = result[result.length - 2]; // Skip the punctuation matching
+      const prev = result[result.length - 2]; // Skip the punctuation matching
 
       if (prev && current) {
         const prevClean = prev.trim().toLowerCase();

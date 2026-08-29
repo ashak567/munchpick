@@ -119,7 +119,7 @@ export class MascotPresenceManager {
     }
 
     // 2. Enforce Lifetimes
-    let canTransition = this.currentInterruptible || timeSpent >= this.currentMinDuration;
+    const canTransition = this.currentInterruptible || timeSpent >= this.currentMinDuration;
 
     if (canTransition) {
       // Process queue if items exist

@@ -516,7 +516,7 @@ export class ContextAssemblyEngine implements CognitiveEngine {
     let totalEstimatedTokens = deduplicatedBlocks.reduce((acc, b) => acc + b.estimatedTokens, 0);
 
     const trimmedBlocks: string[] = [];
-    let skippedBlocks = 0;
+    const skippedBlocks = 0;
 
     if (totalEstimatedTokens > tokenBudget) {
       // Divide into required/critical vs optional blocks

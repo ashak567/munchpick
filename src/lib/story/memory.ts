@@ -201,7 +201,7 @@ export class MemoryConsolidationEngine implements CognitiveEngine {
     }
 
     // 5. Enforce Max Active Memories (Limit to 100)
-    let activeMemories = memories.filter(m => !m.archived);
+    const activeMemories = memories.filter(m => !m.archived);
     if (activeMemories.length > MEMORY_RULES.maxActiveMemories) {
       // Sort active memories by strength ascending
       activeMemories.sort((a, b) => a.strength - b.strength);
