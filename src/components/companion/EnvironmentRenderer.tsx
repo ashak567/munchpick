@@ -57,7 +57,7 @@ export default function EnvironmentRenderer({ theme, children }: EnvironmentRend
 
   return (
     <div 
-      className={`fixed inset-0 w-full h-full overflow-hidden bg-gradient-to-br ${getThemeGradient()} transition-colors duration-1000 z-0`}
+      className={`relative w-full h-full flex flex-col overflow-hidden bg-gradient-to-br ${getThemeGradient()} transition-colors duration-1000 z-0`}
       style={{
         contentVisibility: 'auto'
       }}
@@ -102,7 +102,7 @@ export default function EnvironmentRenderer({ theme, children }: EnvironmentRend
       <AmbientBackground isReduced={isReduced} />
 
       {/* Decorative environment content wrapper */}
-      <div className="relative w-full h-full flex flex-col z-10">
+      <div className="relative w-full h-full flex flex-col z-10 min-h-0 overflow-hidden">
         {children}
       </div>
     </div>

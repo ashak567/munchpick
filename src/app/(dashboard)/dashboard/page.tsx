@@ -316,9 +316,18 @@ export default function DashboardPage() {
   }, [activeMascot, convOutput.state])
 
   // Auto-scroll to bottom of messages
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior, block: 'end' })
+    }
+  }
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading, visiblePaths, shuffling])
+    const timer = setTimeout(() => {
+      scrollToBottom(messages.length <= 1 ? 'auto' : 'smooth')
+    }, 60)
+    return () => clearTimeout(timer)
+  }, [messages, loading, convOutput.showTypingIndicator, currentState, visiblePaths, shuffling])
 
   // Auto-expand textarea (configurable height)
   useEffect(() => {
@@ -502,19 +511,19 @@ export default function DashboardPage() {
   return (
     <EnvironmentRenderer theme={activeTheme}>
       <div 
-        className="flex flex-col justify-between w-full h-[100dvh] relative px-4 mx-auto overflow-hidden transition-all duration-300"
+        className="flex flex-col w-full h-full relative px-3 sm:px-4 mx-auto overflow-hidden min-h-0"
         style={{ 
           maxWidth: `${layout.chatWidth}px`, 
           paddingBottom: layout.isMobile
             ? (layout.keyboardHeight 
-                ? `${layout.keyboardHeight}px` 
-                : 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 32px)')
-            : `${layout.safeAreaInsets.bottom}px`,
-          paddingTop: `${layout.safeAreaInsets.top}px`
+                ? `${layout.keyboardHeight + 8}px` 
+                : 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 24px)')
+            : '8px',
+          paddingTop: '6px'
         }}
       >
         {/* Companion Header Profile */}
-        <div className="flex items-center justify-between border-b border-white/50 pb-4 pt-4 mb-2 flex-shrink-0">
+        <header className="sticky top-0 z-20 backdrop-blur-md bg-white/75 border border-white/80 shadow-3xs rounded-2xl px-4 py-2.5 my-2 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative">
               <CompanionStage 
@@ -550,16 +559,16 @@ export default function DashboardPage() {
 
           <button
             onClick={handleStartFresh}
-            className="px-3 py-1.5 text-charcoal/50 hover:text-charcoal/80 bg-white/50 border border-white/70 hover:bg-white/80 rounded-xl cursor-pointer transition-all flex items-center gap-1 text-[11px] font-bold shadow-2xs hover:shadow-xs active:scale-95"
+            className="px-3 py-1.5 text-charcoal/50 hover:text-charcoal/80 bg-white/60 border border-white/80 hover:bg-white/90 rounded-xl cursor-pointer transition-all flex items-center gap-1 text-[11px] font-bold shadow-2xs hover:shadow-xs active:scale-95"
             title="Start fresh conversation"
           >
             <RotateCcw className="w-3 h-3" />
             <span>Reset</span>
           </button>
-        </div>
+        </header>
 
         {/* Main Viewport Container */}
-        <div className="flex-1 overflow-y-auto px-1 space-y-6 pr-2 mb-4 scrollbar-thin">
+        <main className="flex-1 min-h-0 overflow-y-auto px-1 sm:px-2 pt-2 pb-4 space-y-5 scrollbar-thin overscroll-contain">
           <AnimatePresence initial={false}>
             {isChatEmpty ? (
               /* Welcome / Elegant Empty State Card */
@@ -568,7 +577,7 @@ export default function DashboardPage() {
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                className="py-8 flex flex-col items-center text-center space-y-6 max-w-sm mx-auto"
+                className="py-6 flex flex-col items-center text-center space-y-5 max-w-sm mx-auto"
               >
                 <CompanionStage
                   character={activeMascot}
@@ -612,7 +621,7 @@ export default function DashboardPage() {
                     )}
 
                     <div
-                      className={`max-w-[82%] rounded-2xl px-4 py-3.5 text-sm leading-relaxed border shadow-3xs relative ${
+                      className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-3.5 text-sm leading-relaxed border shadow-3xs relative break-words [overflow-wrap:anywhere] ${
                         isMascot
                           ? 'bg-white border-white/90 text-charcoal rounded-tl-none'
                           : 'bg-[#E3F4EA] border-[#C9EDD6] text-charcoal-dark rounded-br-none'
@@ -753,7 +762,7 @@ export default function DashboardPage() {
               variants={MOTION_SYSTEM_VARIANTS.composerTransition}
               initial="initial"
               animate="animate"
-              className="flex gap-3 items-center text-xs text-charcoal/50 pl-1"
+              className="flex gap-3 items-center text-xs text-charcoal/50 pl-1 py-1"
             >
               <motion.div
                 variants={MOTION_SYSTEM_VARIANTS.bubbleTyping}
@@ -775,12 +784,12 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
-          <div ref={messagesEndRef} />
-        </div>
+          <div ref={messagesEndRef} className="h-1 w-full flex-shrink-0" />
+        </main>
 
         {/* Input Composer Panel */}
-        <div className="w-full pb-4 z-30 flex-shrink-0">
-          <div className="bg-white/80 border border-white/95 rounded-2xl p-2.5 flex items-end gap-2.5 shadow-md backdrop-blur-md focus-within:shadow-lg focus-within:border-primary/50 transition-all">
+        <footer className="w-full pt-1 pb-2 z-20 flex-shrink-0">
+          <div className="bg-white/85 border border-white/95 rounded-2xl p-2.5 flex items-end gap-2.5 shadow-md backdrop-blur-md focus-within:shadow-lg focus-within:border-primary/50 transition-all">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -807,8 +816,7 @@ export default function DashboardPage() {
               </MotionTap>
             </div>
           </div>
-        </div>
-
+        </footer>
       </div>
     </EnvironmentRenderer>
   )
