@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { serverEnv } from '@/lib/env'
-import { llmConfig } from '@/lib/llm/config'
+import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config'
 import { createClient } from '@/utils/supabase/server'
 import { MascotCharacter, MascotExpression } from '@/components/Mascot'
 import { getRelationshipState, getGreetingName } from '@/lib/nickname/service'
@@ -12,7 +12,7 @@ const getGeminiModel = () => {
   if (!apiKey || apiKey === 'MOCK_KEY') return null
   const genAI = new GoogleGenerativeAI(apiKey)
   return genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: getApprovedGeminiModel('auxiliary'),
     generationConfig: { responseMimeType: 'application/json' }
   })
 }

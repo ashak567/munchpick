@@ -8,7 +8,7 @@ import { runSharedPipeline } from '../orchestrator/agents';
 import { AgentObservation, ReasoningPackage } from '../orchestrator/types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
-import { llmConfig } from '@/lib/llm/config';
+import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config';
 
 const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY || 'MOCK_KEY');
 
@@ -54,7 +54,7 @@ export async function analyzeTopics(userInput: string, currentContext = ''): Pro
   }
 
   const model = genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: getApprovedGeminiModel('auxiliary'),
     generationConfig: { responseMimeType: 'application/json' }
   });
 

@@ -27,7 +27,7 @@ function getMockGatewayResponse(text: string): GatewayResponse {
     text,
     metrics: {
       providerId: 'gemini',
-      modelId: 'gemini-1.5-flash',
+      modelId: 'gemini-2.5-flash',
       finishReason: 'stop',
       promptTokens: 10,
       completionTokens: 10,

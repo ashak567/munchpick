@@ -75,7 +75,7 @@ function makeMockGatewayResponse(text: string, finishReason: string = 'stop'): G
     text,
     metrics: {
       providerId: 'gemini',
-      modelId: 'gemini-1.5-flash',
+      modelId: 'gemini-2.5-flash',
       finishReason,
       promptTokens: 100,
       completionTokens: 50,

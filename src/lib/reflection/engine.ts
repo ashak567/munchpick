@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
-import { llmConfig } from '@/lib/llm/config';
+import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config';
 import {
   CognitiveEngine,
   CognitiveTrace,
@@ -195,7 +195,7 @@ export async function extractPathsFromText(
   }
 
   const model = genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: getApprovedGeminiModel('auxiliary'),
     generationConfig: { responseMimeType: 'application/json' }
   });
 

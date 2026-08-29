@@ -124,11 +124,11 @@ describe('Model Selection Architecture Tests', () => {
 
     try {
       llmConfig.providers.gemini.model = 'gemini-2.5-flash';
-      llmConfig.providers.gemini.reasoningModel = 'gemini-2.5-pro';
+      llmConfig.providers.gemini.reasoningModel = 'gemini-2.5-flash';
       llmConfig.providers.gemini.auxiliaryModel = 'gemini-3.1-flash-lite';
 
       expect(llmConfig.providers.gemini.model).toBe('gemini-2.5-flash');
-      expect(llmConfig.providers.gemini.reasoningModel).toBe('gemini-2.5-pro');
+      expect(llmConfig.providers.gemini.reasoningModel).toBe('gemini-2.5-flash');
       expect(llmConfig.providers.gemini.auxiliaryModel).toBe('gemini-3.1-flash-lite');
 
       // Verify that Gemini adapter dynamically uses the configured model rather than hardcoded literals

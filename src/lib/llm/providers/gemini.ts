@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
 import { LLMProvider, LLMRequest, LLMResponse, ProviderCapabilities } from '../types';
 import { PromptRenderer } from '../renderer';
-import { llmConfig } from '../config';
+import { llmConfig, getApprovedGeminiModel, sanitizeOrValidateModel } from '../config';
 
 function mapGeminiFinishReason(reason?: string): 'stop' | 'length' | 'content_filter' | 'other' {
   switch (reason) {
@@ -42,10 +42,11 @@ export class GeminiProviderAdapter implements LLMProvider {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const config = llmConfig.providers.gemini;
-    const defaultModel = config?.model || 'gemini-2.5-flash';
-    const defaultReasoning = config?.reasoningModel || defaultModel;
+    const defaultModel = getApprovedGeminiModel('conversational');
+    const defaultReasoning = getApprovedGeminiModel('reasoning');
     const supportsReasoning = Boolean(request.promptPackage?.providerHints?.supportsReasoning);
-    const modelName = request.model || (supportsReasoning ? defaultReasoning : defaultModel);
+    const fallbackModel = supportsReasoning ? defaultReasoning : defaultModel;
+    const modelName = sanitizeOrValidateModel(request.model, fallbackModel);
     const maxTokens = request.maxTokens ?? config?.maxTokens ?? (supportsReasoning ? 1500 : 800);
 
     const model = genAI.getGenerativeModel({
@@ -60,23 +61,13 @@ export class GeminiProviderAdapter implements LLMProvider {
     });
 
     const promptText = PromptRenderer.renderToText(request.promptPackage);
-    const startTime = Date.now();
-    console.log(`[GeminiAdapter] Request Started (model=${modelName}, promptLength=${promptText.length}, maxTokens=${maxTokens})`);
-    
-    const response = await model.generateContent(promptText);
-    const latency = Date.now() - startTime;
-    console.log(`[GeminiAdapter] Request Completed (model=${modelName}, latency=${latency}ms)`);
-    const text = response.response.text().trim();
-    const candidate = response.response.candidates?.[0];
-    const rawFinishReason = candidate?.finishReason;
-    const finishReason = mapGeminiFinishReason(rawFinishReason);
-    const usage = response.response.usageMetadata;
+    const result = await model.generateContent(promptText);
+    const response = await result.response;
+    const text = response.text();
 
-    if (rawFinishReason === 'MAX_TOKENS') {
-      console.warn(
-        `[GeminiAdapter] Warning: response reached MAX_TOKENS limit (promptTokens=${usage?.promptTokenCount}, candidateTokens=${usage?.candidatesTokenCount}, thoughtsTokens=${(usage as any)?.thoughtsTokenCount || 0})`
-      );
-    }
+    const candidate = response.candidates?.[0];
+    const finishReason = mapGeminiFinishReason(candidate?.finishReason);
+    const usage = response.usageMetadata;
 
     return {
       text,
@@ -94,10 +85,11 @@ export class GeminiProviderAdapter implements LLMProvider {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const config = llmConfig.providers.gemini;
-    const defaultModel = config?.model || 'gemini-2.5-flash';
-    const defaultReasoning = config?.reasoningModel || defaultModel;
+    const defaultModel = getApprovedGeminiModel('conversational');
+    const defaultReasoning = getApprovedGeminiModel('reasoning');
     const supportsReasoning = Boolean(request.promptPackage?.providerHints?.supportsReasoning);
-    const modelName = request.model || (supportsReasoning ? defaultReasoning : defaultModel);
+    const fallbackModel = supportsReasoning ? defaultReasoning : defaultModel;
+    const modelName = sanitizeOrValidateModel(request.model, fallbackModel);
     const maxTokens = request.maxTokens ?? config?.maxTokens ?? (supportsReasoning ? 1500 : 800);
 
     const model = genAI.getGenerativeModel({

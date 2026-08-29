@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+Simport { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
-import { llmConfig } from '@/lib/llm/config';
+import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config';
 import { MunchContextBuilder } from '@/lib/context/builder';
 import {
   runCognitivePipeline,
@@ -58,7 +58,7 @@ const getGeminiModel = () => {
   if (!apiKey || apiKey === 'MOCK_KEY') return null;
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: getApprovedGeminiModel('auxiliary'),
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 250
@@ -386,7 +386,7 @@ export async function POST(request: NextRequest) {
         if (typeof metadata === 'string') {
           try {
             metadata = JSON.parse(metadata);
-          } catch {}
+          } catch { }
         }
         if (metadata) {
           if (metadata.storyState) {
@@ -485,11 +485,11 @@ export async function POST(request: NextRequest) {
       const cached = SPECULATIVE_CACHE.get(draftKey);
       if (cached && cached.pipelineVersion === PIPELINE_VERSION) {
         const invalidatedEngines = resolveInvalidatedEngines(cached.draft, content);
-        
+
         // In speculative cache hit, initialTrace is seeded with the cached speculative trace
         const cachedTrace = cached.cognitiveTrace;
         cachedTrace.generatedPaths = initialTrace.generatedPaths; // keep paths
-        
+
         traceToUse = cachedTrace;
         activePipeline = pipeline.filter(engine => invalidatedEngines.has(engine.name));
       }

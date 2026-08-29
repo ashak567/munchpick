@@ -1,6 +1,5 @@
 import { LLMProvider, ProviderCapabilities, GatewayHealth } from './types';
 import { GeminiProviderAdapter } from './providers/gemini';
-import { AnthropicProviderAdapter } from './providers/anthropic';
 import { GroqProviderAdapter } from './providers/groq';
 import { OpenRouterProviderAdapter } from './providers/openrouter';
 import { llmConfig } from './config';
@@ -9,18 +8,14 @@ export class ProviderResolver {
   private providers = new Map<string, LLMProvider>();
 
   constructor() {
-    // Register available provider adapters
+    // Register available approved provider adapters (Gemini -> Groq -> OpenRouter)
     this.registerProvider(new GeminiProviderAdapter());
-    this.registerProvider(new AnthropicProviderAdapter());
     this.registerProvider(new GroqProviderAdapter());
     this.registerProvider(new OpenRouterProviderAdapter());
   }
 
   public registerProvider(provider: LLMProvider): void {
     this.providers.set(provider.id, provider);
-    if (provider.id === 'anthropic') {
-      this.providers.set('claude', provider);
-    }
   }
 
   /**

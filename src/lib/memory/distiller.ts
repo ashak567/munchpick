@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
-import { llmConfig } from '@/lib/llm/config';
+import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config';
 import { addOrReinforceMemory } from './service';
 import { MemoryType } from './types';
 
@@ -21,7 +21,7 @@ export async function analyzeAndDistillMemories(
   payload: any
 ) {
   const model = genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-3.1-flash-lite',
+    model: getApprovedGeminiModel('auxiliary'),
     generationConfig: { responseMimeType: 'application/json' }
   });
 

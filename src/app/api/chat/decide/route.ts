@@ -2,7 +2,7 @@ import { NextRequest, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
-import { llmConfig } from '@/lib/llm/config';
+import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config';
 import { selectNickname } from '@/lib/nickname/service';
 import { analyzeAndLogObservations } from '@/lib/hup/analyzer';
 import { analyzeAndDistillMemories } from '@/lib/memory/distiller';
@@ -14,7 +14,7 @@ const getGeminiModel = () => {
   if (!apiKey || apiKey === 'MOCK_KEY') return null;
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: getApprovedGeminiModel('auxiliary'),
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.7

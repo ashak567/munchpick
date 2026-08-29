@@ -24,7 +24,7 @@ describe('Decision LLM Utilities via LLMGateway (FR-009 Compliance)', () => {
         streamed: false,
         metrics: {
           providerId: 'gemini',
-          modelId: 'gemini-1.5-flash',
+          modelId: 'gemini-2.5-flash',
           finishReason: 'stop',
           promptTokens: 50,
           completionTokens: 20,
@@ -69,7 +69,7 @@ describe('Decision LLM Utilities via LLMGateway (FR-009 Compliance)', () => {
         streamed: false,
         metrics: {
           providerId: 'gemini',
-          modelId: 'gemini-1.5-flash',
+          modelId: 'gemini-2.5-flash',
           finishReason: 'stop',
           promptTokens: 80,
           completionTokens: 30,
@@ -118,7 +118,7 @@ describe('Decision LLM Utilities via LLMGateway (FR-009 Compliance)', () => {
         streamed: false,
         metrics: {
           providerId: 'gemini',
-          modelId: 'gemini-1.5-flash',
+          modelId: 'gemini-2.5-flash',
           finishReason: 'stop',
           promptTokens: 100,
           completionTokens: 40,

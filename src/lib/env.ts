@@ -28,10 +28,6 @@ const serverEnvSchema = clientEnvSchema.extend({
   GROQ_MODEL: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().optional(),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().optional(),
-  ANTHROPIC_REASONING_MODEL: z.string().optional(),
-  ANTHROPIC_AUXILIARY_MODEL: z.string().optional(),
   LLM_DEFAULT_PROVIDER: z.string().optional(),
   LLM_FALLBACK_PROVIDERS: z.string().optional(),
 })
@@ -101,10 +97,6 @@ function getServerEnv() {
     GROQ_MODEL: process.env.GROQ_MODEL,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
-    ANTHROPIC_REASONING_MODEL: process.env.ANTHROPIC_REASONING_MODEL,
-    ANTHROPIC_AUXILIARY_MODEL: process.env.ANTHROPIC_AUXILIARY_MODEL,
     LLM_DEFAULT_PROVIDER: process.env.LLM_DEFAULT_PROVIDER,
     LLM_FALLBACK_PROVIDERS: process.env.LLM_FALLBACK_PROVIDERS,
   })

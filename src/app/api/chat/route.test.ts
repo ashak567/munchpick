@@ -83,7 +83,7 @@ function getMockGatewayResponse(text: string) {
     text,
     streamed: false,
     metrics: {
-      providerId: 'gemini', modelId: 'gemini-1.5-flash', finishReason: 'stop',
+      providerId: 'gemini', modelId: 'gemini-2.5-flash', finishReason: 'stop',
       promptTokens: 10, completionTokens: 10, totalTokens: 20, latency: 1,
       retries: 0, timeoutMs: 5000, gatewayVersion: 'v1.0.0'
     }
@@ -377,7 +377,7 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
       streamed: false,
       metrics: {
         providerId: 'gemini',
-        modelId: 'gemini-1.5-flash',
+        modelId: 'gemini-2.5-flash',
         finishReason: 'stop',
         promptTokens: 50,
         completionTokens: 15,
@@ -574,7 +574,7 @@ describe('Chat API Route Handler - FR-009 Failure Tests', () => {
       streamed: false,
       metrics: {
         providerId: 'gemini',
-        modelId: 'gemini-1.5-flash',
+        modelId: 'gemini-2.5-flash',
         finishReason: 'stop',
         promptTokens: 50,
         completionTokens: 10,
