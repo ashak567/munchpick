@@ -1,4 +1,4 @@
-Simport { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { serverEnv } from '@/lib/env';
