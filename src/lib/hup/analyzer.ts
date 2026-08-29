@@ -4,8 +4,8 @@ import { llmConfig } from '@/lib/llm/config';
 import { addObservation } from './service';
 import { HUPSObservation, HUPSDimension } from './types';
 
-// Initialize the Gemini API client — guaranteed valid by env.ts validation
-const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY);
+// Initialize the Gemini API client safely
+const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY || 'MOCK_KEY');
 
 interface GeminiObservationOutput {
   dimension: HUPSDimension;
@@ -22,7 +22,7 @@ export async function analyzeAndLogObservations(
   payload: any
 ) {
   const model = genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-3.1-flash-lite',
     generationConfig: {
       responseMimeType: 'application/json'
     }

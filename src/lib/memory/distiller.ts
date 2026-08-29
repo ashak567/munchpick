@@ -4,7 +4,7 @@ import { llmConfig } from '@/lib/llm/config';
 import { addOrReinforceMemory } from './service';
 import { MemoryType } from './types';
 
-const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY || 'MOCK_KEY');
 
 interface GeminiMemoryOutput {
   memory_type: MemoryType;
@@ -21,7 +21,7 @@ export async function analyzeAndDistillMemories(
   payload: any
 ) {
   const model = genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-3.1-flash-lite',
     generationConfig: { responseMimeType: 'application/json' }
   });
 

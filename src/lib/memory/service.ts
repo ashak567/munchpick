@@ -4,7 +4,7 @@ import { serverEnv } from '@/lib/env';
 import { llmConfig } from '@/lib/llm/config';
 import { UserMemory, EvidenceReference, MemoryType } from './types';
 
-const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(serverEnv.GEMINI_API_KEY || 'MOCK_KEY');
 
 // Finds a semantically similar memory of the same type for reinforcement using Gemini
 async function findSimilarMemoryMatch(
@@ -16,7 +16,7 @@ async function findSimilarMemoryMatch(
   if (existingMemories.length === 0) return null;
 
   const model = genAI.getGenerativeModel({
-    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-1.5-flash',
+    model: llmConfig.providers.gemini?.auxiliaryModel || llmConfig.providers.gemini?.model || 'gemini-3.1-flash-lite',
     generationConfig: { responseMimeType: 'application/json' }
   });
 
