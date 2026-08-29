@@ -574,7 +574,11 @@ export default function DashboardPage() {
         className="flex flex-col w-full h-full relative px-2 sm:px-4 mx-auto overflow-hidden min-h-0 flex-1"
         style={{ 
           maxWidth: `${layout.chatWidth}px`, 
-          paddingBottom: layout.isMobile && layout.keyboardHeight ? `${layout.keyboardHeight + 4}px` : '4px',
+          paddingBottom: layout.isDesktop
+            ? '8px'
+            : (layout.keyboardHeight > 0 
+                ? `${layout.keyboardHeight + 8}px` 
+                : 'calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 20px)'),
           paddingTop: '6px'
         }}
       >

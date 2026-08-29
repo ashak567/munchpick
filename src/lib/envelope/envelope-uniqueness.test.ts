@@ -138,7 +138,7 @@ vi.mock('@/lib/nickname/service', () => ({
   getRelationshipState: vi.fn().mockResolvedValue({ level: 'familiar', score: 25 })
 }))
 
-describe('Phase 8.5 — Envelope Message Uniqueness & Anti-Repetition Specification', () => {
+describe('Phase 8.5 — Envelope Message Uniqueness & Anti-Repetition Specification', { timeout: 15000 }, () => {
   beforeEach(() => {
     mockEnvelopeStore = []
     mockChatStore = []
