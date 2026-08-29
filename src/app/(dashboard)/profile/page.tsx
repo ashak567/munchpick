@@ -192,11 +192,15 @@ export default function ProfilePage() {
       clearAssetCache()
       const supabase = createClient()
       await supabase.auth.signOut()
-      await logout()
+      try {
+        await logout()
+      } catch {
+        // NEXT_REDIRECT handled by window.location
+      }
     } catch (err) {
       console.error('Failed to log out', err)
-      setLoggingOut(false)
-      setShowConfirm(false)
+    } finally {
+      window.location.href = '/'
     }
   }
 
