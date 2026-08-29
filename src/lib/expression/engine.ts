@@ -156,8 +156,16 @@ export class ExpressionTransformer implements TransformerPlugin {
         result = result.replace(/\.(?=[^.]*$)/, '!'); // Replace last period with exclamation point
       }
     } else if (profile.mascotId === 'ollie') {
-      // Ollie is patient: keep ending periods clean
+      // Ollie is patient and reflective: keep ending periods clean
       result = result.replace(/!\s*$/, '.');
+    } else if (profile.mascotId === 'froggy' || profile.mascotId === 'pandy') {
+      // Froggy and Pandy are calm/gentle: soften abrupt exclamation endings
+      result = result.replace(/!\s*$/, '.');
+    } else if (profile.mascotId === 'chicky') {
+      // Chicky is upbeat and joyful: warm celebratory tone
+      if (!result.includes('!') && !result.includes('?')) {
+        result = result.replace(/\.(?=[^.]*$)/, '!');
+      }
     }
 
     return result;

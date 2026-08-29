@@ -1,15 +1,97 @@
-import { CognitiveEngine, CognitiveTrace, ContextPackage, PersonalityProfile, PersonalityDecision, ResponseConstraints } from './types';
+import { CognitiveEngine, CognitiveTrace, ContextPackage, PersonalityProfile, PersonalityDecision, ResponseConstraints, MascotCharacter } from './types';
 
-// Core stable personality profile (Munch)
-const CORE_PROFILE: PersonalityProfile = {
-  empathy: 0.8,
-  curiosity: 0.7,
-  playfulness: 0.5,
-  encouragement: 0.7,
-  calmness: 0.8,
-  directness: 0.4,
-  optimism: 0.6,
-  confidence: 0.6
+// Core baseline personality profiles per mascot
+const MASCOT_CORE_PROFILES: Record<string, PersonalityProfile> = {
+  munch: {
+    empathy: 0.8,
+    curiosity: 0.7,
+    playfulness: 0.5,
+    encouragement: 0.7,
+    calmness: 0.8,
+    directness: 0.4,
+    optimism: 0.6,
+    confidence: 0.6
+  },
+  ollie: {
+    empathy: 0.6,
+    curiosity: 0.95,
+    playfulness: 0.3,
+    encouragement: 0.6,
+    calmness: 0.8,
+    directness: 0.5,
+    optimism: 0.6,
+    confidence: 0.85
+  },
+  ellie: {
+    empathy: 0.95,
+    curiosity: 0.5,
+    playfulness: 0.3,
+    encouragement: 0.8,
+    calmness: 0.9,
+    directness: 0.3,
+    optimism: 0.6,
+    confidence: 0.8
+  },
+  pandy: {
+    empathy: 0.95,
+    curiosity: 0.4,
+    playfulness: 0.3,
+    encouragement: 0.6,
+    calmness: 0.95,
+    directness: 0.2,
+    optimism: 0.5,
+    confidence: 0.7
+  },
+  dobby: {
+    empathy: 0.6,
+    curiosity: 0.6,
+    playfulness: 0.8,
+    encouragement: 0.95,
+    calmness: 0.4,
+    directness: 0.7,
+    optimism: 0.95,
+    confidence: 0.9
+  },
+  coco: {
+    empathy: 0.7,
+    curiosity: 0.9,
+    playfulness: 0.85,
+    encouragement: 0.7,
+    calmness: 0.6,
+    directness: 0.4,
+    optimism: 0.8,
+    confidence: 0.75
+  },
+  froggy: {
+    empathy: 0.7,
+    curiosity: 0.5,
+    playfulness: 0.3,
+    encouragement: 0.6,
+    calmness: 0.98,
+    directness: 0.4,
+    optimism: 0.6,
+    confidence: 0.8
+  },
+  bubbles: {
+    empathy: 0.75,
+    curiosity: 0.7,
+    playfulness: 0.7,
+    encouragement: 0.7,
+    calmness: 0.9,
+    directness: 0.3,
+    optimism: 0.8,
+    confidence: 0.75
+  },
+  chicky: {
+    empathy: 0.7,
+    curiosity: 0.6,
+    playfulness: 0.9,
+    encouragement: 0.95,
+    calmness: 0.4,
+    directness: 0.5,
+    optimism: 0.98,
+    confidence: 0.85
+  }
 };
 
 // Configurable Rules Map
@@ -60,15 +142,16 @@ export class PersonalityEngine implements CognitiveEngine {
 
   public async execute(trace: CognitiveTrace, context: ContextPackage): Promise<CognitiveTrace> {
     const previousDecision = context.previousPersonalityDecision as PersonalityDecision | undefined;
+    const activeMascot = trace.mascotCharacter || 'munch';
 
-    // 1. Calculate Trait Expression Scores
-    const empathyExpr = this.evaluateTrait('empathy', trace, previousDecision);
-    const curiosityExpr = this.evaluateTrait('curiosity', trace, previousDecision);
-    const playfulnessExpr = this.evaluateTrait('playfulness', trace, previousDecision);
-    const encouragementExpr = this.evaluateTrait('encouragement', trace, previousDecision);
-    const calmnessExpr = this.evaluateTrait('calmness', trace, previousDecision);
-    const directnessExpr = this.evaluateTrait('directness', trace, previousDecision);
-    const optimismExpr = this.evaluateTrait('optimism', trace, previousDecision);
+    // 1. Calculate Trait Expression Scores using the active character's base profile
+    const empathyExpr = this.evaluateTrait('empathy', trace, activeMascot, previousDecision);
+    const curiosityExpr = this.evaluateTrait('curiosity', trace, activeMascot, previousDecision);
+    const playfulnessExpr = this.evaluateTrait('playfulness', trace, activeMascot, previousDecision);
+    const encouragementExpr = this.evaluateTrait('encouragement', trace, activeMascot, previousDecision);
+    const calmnessExpr = this.evaluateTrait('calmness', trace, activeMascot, previousDecision);
+    const directnessExpr = this.evaluateTrait('directness', trace, activeMascot, previousDecision);
+    const optimismExpr = this.evaluateTrait('optimism', trace, activeMascot, previousDecision);
 
     const traitScores = [
       { name: 'empathetic', val: empathyExpr },
@@ -157,7 +240,7 @@ export class PersonalityEngine implements CognitiveEngine {
       ? (previousDecision.confidence * 0.2 + rawConfidence * 0.8)
       : rawConfidence;
 
-    // 8. Save Personality Decision
+    // 8. Save Personality Decision with accurate mascotId
     trace.personalityDecision = {
       dominantTrait,
       communicationStyle,
@@ -171,7 +254,7 @@ export class PersonalityEngine implements CognitiveEngine {
       stability,
       supportingTraits,
       responseConstraints,
-      mascotId: 'munch'
+      mascotId: activeMascot as MascotCharacter
     };
 
     return trace;
@@ -180,9 +263,11 @@ export class PersonalityEngine implements CognitiveEngine {
   private evaluateTrait(
     trait: keyof PersonalityProfile,
     trace: CognitiveTrace,
+    activeMascot: string,
     previousDecision?: PersonalityDecision
   ): number {
-    let score = CORE_PROFILE[trait];
+    const profile = MASCOT_CORE_PROFILES[activeMascot] || MASCOT_CORE_PROFILES.munch;
+    let score = profile[trait];
     
     // Add weights from configurable rules
     const rules = PERSONALITY_RULES.traitTriggers[trait as keyof typeof PERSONALITY_RULES.traitTriggers] || [];

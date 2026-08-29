@@ -12,7 +12,7 @@ export class ConsistencyValidationPlugin implements ValidationPlugin {
     // Rule 1: Mascot name/character mismatch checks
     if (mascot && mascot.mascotId) {
       const activeMascot = mascot.mascotId.toLowerCase();
-      const allMascots = ['munch', 'pandy', 'froggy', 'dobby', 'chicky', 'ollie', 'ellie'];
+      const allMascots = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky'];
       const otherMascots = allMascots.filter(m => m !== activeMascot);
 
       for (const other of otherMascots) {

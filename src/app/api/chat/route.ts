@@ -330,14 +330,14 @@ export async function POST(request: NextRequest) {
       branches[activeTopicKey] = {
         state: activeChat.state || 'Listening',
         paths: chatMetadata.possiblePaths || [],
-        mascot: chatMetadata.lastMascot || 'munch'
+        mascot: chatMetadata.lastMascot || chatMetadata.primaryMascot || 'munch'
       };
 
       // Create or resume target branch
       const resumedBranch = branches[targetTopicKey] || {
         state: 'Listening',
         paths: [],
-        mascot: 'munch'
+        mascot: chatMetadata.primaryMascot || 'munch'
       };
 
       activeTopicKey = targetTopicKey;
@@ -441,7 +441,7 @@ export async function POST(request: NextRequest) {
       reflections: [],
       readinessScore: 0.0,
       readinessThreshold: 0.65,
-      mascotCharacter: chatMetadata.lastMascot || 'munch',
+      mascotCharacter: chatMetadata.primaryMascot || chatMetadata.lastMascot || 'munch',
       mascotExpression: 'idle',
       mascotReason: '',
       generatedPaths: chatMetadata.possiblePaths || [],

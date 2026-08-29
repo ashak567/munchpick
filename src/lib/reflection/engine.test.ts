@@ -87,7 +87,7 @@ describe('Cognitive Reflected Engine System', () => {
       reflections: [],
       readinessScore: 0,
       readinessThreshold: 0,
-      mascotCharacter: 'munch',
+      mascotCharacter: undefined as any,
       mascotExpression: 'idle',
       mascotReason: '',
       generatedPaths: [],

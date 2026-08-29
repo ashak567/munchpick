@@ -2,6 +2,8 @@ import { MascotCharacter, MascotExpression } from '@/components/Mascot';
 import { DetectedEmotion, EmotionalState, EmotionalGuidance, EmotionalDynamics } from '../emotion/types';
 import { StoryState, StoryProgress, StoryInsight, MemoryState } from '../story/types';
 
+export type { MascotCharacter, MascotExpression };
+
 export type ContextCategory =
   | "system"
   | "emotion"

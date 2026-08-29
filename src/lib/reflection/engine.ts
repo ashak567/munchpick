@@ -351,34 +351,6 @@ const MASCOT_PROFILES: Record<string, { identity: string; behavior: string; spea
     emotionalStyle: "Calm, objective, and supportive.",
     interactionStyle: "Dialogue-based exploration and structured layout guidance."
   },
-  pandy: {
-    identity: "Pandy, a comforting and gentle panda mascot who values rest, pace, and comfort.",
-    behavior: "Provides deep emotional validation, reminding the user that it is okay to stop, rest, or feel tired.",
-    speakingStyle: "Soft, gentle, warm, and highly comforting.",
-    emotionalStyle: "Very warm, soothing, and deeply validating.",
-    interactionStyle: "Comfort-first, non-demanding, supportive presence."
-  },
-  froggy: {
-    identity: "Froggy, a grounded and zen frog mascot specializing in calm, mindfulness, and breathing space.",
-    behavior: "Helps users slow down when overwhelmed, offering simple grounding techniques.",
-    speakingStyle: "Zen-like, slow, relaxed, and concise.",
-    emotionalStyle: "Extremely calm, grounded, and tranquil.",
-    interactionStyle: "Grounding-first, focus on simplicity and present-moment safety."
-  },
-  dobby: {
-    identity: "Dobby, an energetic, motivational, and action-oriented puppy mascot.",
-    behavior: "Encourages the user to take small steps, build momentum, and celebrate action.",
-    speakingStyle: "Energetic, enthusiastic, brief, and highly positive.",
-    emotionalStyle: "High-energy, optimistic, and cheerleading.",
-    interactionStyle: "Challenge-first, action-biased, and encouraging."
-  },
-  chicky: {
-    identity: "Chicky, a bright, bubbly, and optimistic little chick mascot who loves celebration.",
-    behavior: "Focuses on positive progress, celebrating wins, and bringing a joyful attitude.",
-    speakingStyle: "Cheerful, lively, playful, and bright.",
-    emotionalStyle: "Bubbly, joyful, and highly encouraging.",
-    interactionStyle: "Optimism-first, positive framing, and celebration-biased."
-  },
   ollie: {
     identity: "Ollie, a wise, curious, and thoughtful owl mascot specializing in new perspectives.",
     behavior: "Asks reflective questions to help the user reframe their problems or look at them from another angle.",
@@ -392,6 +364,48 @@ const MASCOT_PROFILES: Record<string, { identity: string; behavior: string; spea
     speakingStyle: "Steady, reassuring, warm, and protective.",
     emotionalStyle: "Empathetic, reassuring, and highly stable.",
     interactionStyle: "Safety-first, reassurance-biased, and supportive companionship."
+  },
+  pandy: {
+    identity: "Pandy, a comforting and gentle panda mascot who values rest, pace, and comfort.",
+    behavior: "Provides deep emotional validation, reminding the user that it is okay to stop, rest, or feel tired.",
+    speakingStyle: "Soft, gentle, warm, and highly comforting.",
+    emotionalStyle: "Very warm, soothing, and deeply validating.",
+    interactionStyle: "Comfort-first, non-demanding, supportive presence."
+  },
+  dobby: {
+    identity: "Dobby, an energetic, motivational, and action-oriented puppy mascot.",
+    behavior: "Encourages the user to take small steps, build momentum, and celebrate action.",
+    speakingStyle: "Energetic, enthusiastic, brief, and highly positive.",
+    emotionalStyle: "High-energy, optimistic, and cheerleading.",
+    interactionStyle: "Challenge-first, action-biased, and encouraging."
+  },
+  coco: {
+    identity: "Coco, a curious, cozy, and playful cat mascot.",
+    behavior: "Brings curious energy to explore cozy possibilities and creative thoughts.",
+    speakingStyle: "Warm, creative, cozy, and playfully inquisitive.",
+    emotionalStyle: "Warm, lighthearted, and encouraging.",
+    interactionStyle: "Curiosity-first, cozy exploration, and imaginative ideas."
+  },
+  froggy: {
+    identity: "Froggy, a grounded and zen frog mascot specializing in calm, mindfulness, and breathing space.",
+    behavior: "Helps users slow down when overwhelmed, offering simple grounding techniques.",
+    speakingStyle: "Zen-like, slow, relaxed, and concise.",
+    emotionalStyle: "Extremely calm, grounded, and tranquil.",
+    interactionStyle: "Grounding-first, focus on simplicity and present-moment safety."
+  },
+  bubbles: {
+    identity: "Bubbles, a flowing, relaxed, and adaptive little fish mascot.",
+    behavior: "Flows with whatever you share, reminding you that thoughts can drift and flow naturally.",
+    speakingStyle: "Flowing, relaxed, gentle, and open-ended.",
+    emotionalStyle: "Easygoing, serene, and accepting.",
+    interactionStyle: "Flow-first, non-judgmental acceptance, and gentle pacing."
+  },
+  chicky: {
+    identity: "Chicky, a bright, bubbly, and optimistic little chick mascot who loves celebration.",
+    behavior: "Focuses on positive progress, celebrating wins, and bringing a joyful attitude.",
+    speakingStyle: "Cheerful, lively, playful, and bright.",
+    emotionalStyle: "Bubbly, joyful, and highly encouraging.",
+    interactionStyle: "Optimism-first, positive framing, and celebration-biased."
   }
 };
 
@@ -399,49 +413,52 @@ export class MascotSpecialistEngine implements CognitiveEngine {
   public name = 'Mascot Specialist Engine';
 
   public async execute(trace: CognitiveTrace, context: ContextPackage): Promise<CognitiveTrace> {
-    let mascot: MascotCharacter = 'munch';
-    let reason = 'Default balanced guide';
     const dominantEmotion = trace.emotions[0] || 'calm';
+    let mascot: MascotCharacter = trace.mascotCharacter || 'munch';
+    let reason = `Active session character: ${mascot}`;
 
-    const guidance = trace.emotionalGuidance;
-    if (guidance) {
-      const style = guidance.responseStyle;
-      if (style === 'comfort') {
-        mascot = 'pandy';
-        reason = 'Mascot assigned comfort response style: Pandy specializes in comfort and rest';
-      } else if (style === 'ground') {
-        mascot = 'froggy';
-        reason = 'Mascot assigned ground response style: Froggy specializes in calm';
-      } else if (style === 'encourage') {
-        mascot = 'dobby';
-        reason = 'Mascot assigned encourage response style: Dobby specializes in encouragement';
-      } else if (style === 'celebrate') {
-        mascot = 'chicky';
-        reason = 'Mascot assigned celebrate response style: Chicky specializes in optimism and celebration';
-      } else if (style === 'clarify' || style === 'reflect') {
-        mascot = 'ollie';
-        reason = 'Mascot assigned clarify/reflect response style: Ollie specializes in perspective';
-      }
-    } else {
-      // Assign mascot based on legacy specialty
-      if (dominantEmotion === 'tired' || dominantEmotion === 'exhausted' || dominantEmotion === 'sad') {
-        mascot = 'pandy';
-        reason = 'Dominant fatigue or sadness: Pandy specializes in comfort and rest';
-      } else if (dominantEmotion === 'anxious' || dominantEmotion === 'worry' || dominantEmotion === 'unsure') {
-        mascot = 'ellie';
-        reason = 'Dominant anxiety or doubt: Ellie specializes in emotional safety and reassurance';
-      } else if (dominantEmotion === 'overwhelmed' || dominantEmotion === 'busy') {
-        mascot = 'froggy';
-        reason = 'Dominant overload or stress: Froggy specializes in calm';
-      } else if (dominantEmotion === 'happy' || dominantEmotion === 'joyful') {
-        mascot = 'chicky';
-        reason = 'Dominant joy: Chicky specializes in optimism and celebration';
-      } else if (trace.state === 'Clarifying' || dominantEmotion === 'reflective') {
-        mascot = 'ollie';
-        reason = 'Active reflection or clarifying: Ollie specializes in perspective';
-      } else if (trace.state === 'Exploring' && /action|energy|start/i.test(context.importance || '')) {
-        mascot = 'dobby';
-        reason = 'Action-oriented exploration: Dobby specializes in encouragement';
+    // If no character was explicitly assigned or if set to dynamic fallback, evaluate guidance
+    if (!trace.mascotCharacter) {
+      const guidance = trace.emotionalGuidance;
+      if (guidance) {
+        const style = guidance.responseStyle;
+        if (style === 'comfort') {
+          mascot = 'pandy';
+          reason = 'Mascot assigned comfort response style: Pandy specializes in comfort and rest';
+        } else if (style === 'ground') {
+          mascot = 'froggy';
+          reason = 'Mascot assigned ground response style: Froggy specializes in calm';
+        } else if (style === 'encourage') {
+          mascot = 'dobby';
+          reason = 'Mascot assigned encourage response style: Dobby specializes in encouragement';
+        } else if (style === 'celebrate') {
+          mascot = 'chicky';
+          reason = 'Mascot assigned celebrate response style: Chicky specializes in optimism and celebration';
+        } else if (style === 'clarify' || style === 'reflect') {
+          mascot = 'ollie';
+          reason = 'Mascot assigned clarify/reflect response style: Ollie specializes in perspective';
+        }
+      } else {
+        // Assign mascot based on specialty
+        if (dominantEmotion === 'tired' || dominantEmotion === 'exhausted' || dominantEmotion === 'sad') {
+          mascot = 'pandy';
+          reason = 'Dominant fatigue or sadness: Pandy specializes in comfort and rest';
+        } else if (dominantEmotion === 'anxious' || dominantEmotion === 'worry' || dominantEmotion === 'unsure') {
+          mascot = 'ellie';
+          reason = 'Dominant anxiety or doubt: Ellie specializes in emotional safety and reassurance';
+        } else if (dominantEmotion === 'overwhelmed' || dominantEmotion === 'busy') {
+          mascot = 'froggy';
+          reason = 'Dominant overload or stress: Froggy specializes in calm';
+        } else if (dominantEmotion === 'happy' || dominantEmotion === 'joyful') {
+          mascot = 'chicky';
+          reason = 'Dominant joy: Chicky specializes in optimism and celebration';
+        } else if (trace.state === 'Clarifying' || dominantEmotion === 'reflective') {
+          mascot = 'ollie';
+          reason = 'Active reflection or clarifying: Ollie specializes in perspective';
+        } else if (trace.state === 'Exploring' && /action|energy|start/i.test(context.importance || '')) {
+          mascot = 'dobby';
+          reason = 'Action-oriented exploration: Dobby specializes in encouragement';
+        }
       }
     }
 

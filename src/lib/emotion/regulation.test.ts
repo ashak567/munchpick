@@ -128,6 +128,7 @@ describe('Emotion Regulation Engine', () => {
     const mascotEngine = new MascotSpecialistEngine();
 
     const trace = getBaseTrace();
+    delete (trace as any).mascotCharacter;
     trace.emotionalGuidance = {
       responseStyle: 'comfort',
       urgency: 'medium',
