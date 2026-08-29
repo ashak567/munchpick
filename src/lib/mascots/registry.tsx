@@ -100,10 +100,10 @@ function renderMouth(cx: number, cy: number, expression: string) {
   const exprConfig = MASCOT_EXPRESSION_REGISTRY[expression] || MASCOT_EXPRESSION_REGISTRY.idle
   
   const path = exprConfig.mouthPath
-    .replace(/{cx\s*-\s*(\d+)}/g, (_, offset) => (cx - Number(offset)).toString())
-    .replace(/{cx\s*\+\s*(\d+)}/g, (_, offset) => (cx + Number(offset)).toString())
-    .replace(/{cy\s*-\s*(\d+)}/g, (_, offset) => (cy - Number(offset)).toString())
-    .replace(/{cy\s*\+\s*(\d+)}/g, (_, offset) => (cy + Number(offset)).toString())
+    .replace(/{cx\s*-\s*(\d+(?:\.\d+)?)}/g, (_, offset) => (cx - Number(offset)).toString())
+    .replace(/{cx\s*\+\s*(\d+(?:\.\d+)?)}/g, (_, offset) => (cx + Number(offset)).toString())
+    .replace(/{cy\s*-\s*(\d+(?:\.\d+)?)}/g, (_, offset) => (cy - Number(offset)).toString())
+    .replace(/{cy\s*\+\s*(\d+(?:\.\d+)?)}/g, (_, offset) => (cy + Number(offset)).toString())
     .replace(/{cx}/g, cx.toString())
     .replace(/{cy}/g, cy.toString())
 
