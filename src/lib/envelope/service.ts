@@ -606,8 +606,8 @@ export async function getWelcomeState(
       cognitiveState: options?.cognitiveState
     })
 
-    // 60% envelope, 40% direct
-    const presentationType = Math.random() < 0.6 ? 'envelope' : 'direct'
+    // 100% envelope presentation
+    const presentationType = 'envelope'
 
     const insertPayload: any = {
       user_id: userId,

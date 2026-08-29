@@ -193,7 +193,7 @@ export default function DashboardPage() {
   // This is the single source of truth for mascot expression, attention,
   // typing indicators, animations, and reading state.
   const { output: convOutput, dispatch: dispatchConv } = useConversationPresence()
-  const { refresh: refreshEnvelope } = useWelcome()
+  const { state: envelopeState, openEnvelope, refresh: refreshEnvelope } = useWelcome()
 
   const layout = useResponsiveLayout()
   const experienceManagerRef = useRef<PresenceExperienceManager | null>(null)
@@ -613,14 +613,28 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleStartFresh}
-            className="px-3 py-1.5 text-charcoal/50 hover:text-charcoal/80 bg-white/60 border border-white/80 hover:bg-white/90 rounded-xl cursor-pointer transition-all flex items-center gap-1 text-[11px] font-bold shadow-2xs hover:shadow-xs active:scale-95"
-            title="Start fresh conversation"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>Reset</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => openEnvelope({ chatId: chatId || undefined })}
+              className="px-2.5 py-1.5 text-charcoal/70 hover:text-charcoal bg-white/70 border border-white hover:bg-white rounded-xl cursor-pointer transition-all flex items-center gap-1.5 text-[11px] font-bold shadow-2xs hover:shadow-xs active:scale-95"
+              title="Open personal letter from Munch"
+            >
+              <span className="text-xs">💌</span>
+              <span className="hidden sm:inline">Letter</span>
+              {envelopeState?.letter && !envelopeState.letter.is_read && (
+                <span className="w-2 h-2 rounded-full bg-primary-dark animate-pulse" />
+              )}
+            </button>
+
+            <button
+              onClick={handleStartFresh}
+              className="px-3 py-1.5 text-charcoal/50 hover:text-charcoal/80 bg-white/60 border border-white/80 hover:bg-white/90 rounded-xl cursor-pointer transition-all flex items-center gap-1 text-[11px] font-bold shadow-2xs hover:shadow-xs active:scale-95"
+              title="Start fresh conversation"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          </div>
         </header>
 
         {/* Main Viewport Container */}

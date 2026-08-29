@@ -69,7 +69,44 @@ export async function POST(request: NextRequest) {
         currentTopic,
         triggerType: 'conversational'
       })
-      return jsonNoStore({ content })
+
+      // Insert into envelope_letters as unread letter
+      const { data: newLetter, error: insertErr } = await supabase
+        .from('envelope_letters')
+        .insert({
+          user_id: user.id,
+          chat_id: chatId || null,
+          letter_type: 'conversational',
+          content,
+          mascot_character_used: 'munch',
+          mascot_expression: 'happy',
+          scene_used: 'default',
+          presentation_type: 'envelope',
+          is_read: false
+        })
+        .select()
+        .single()
+
+      if (insertErr) {
+        console.warn('[EnvelopeRoute] Insert envelope letter fallback:', insertErr)
+      }
+
+      return jsonNoStore({ 
+        content, 
+        letter: newLetter || {
+          id: 'temp-' + Date.now(),
+          user_id: user.id,
+          chat_id: chatId || null,
+          letter_type: 'conversational',
+          content,
+          mascot_character_used: 'munch',
+          mascot_expression: 'happy',
+          scene_used: 'default',
+          presentation_type: 'envelope',
+          is_read: false,
+          created_at: new Date().toISOString()
+        }
+      })
     }
 
     if (!letterId) {
@@ -80,7 +117,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Mark letter as read for authenticated user.id
-    await markEnvelopeAsRead(user.id, letterId)
+    if (!letterId.startsWith('temp-')) {
+      await markEnvelopeAsRead(user.id, letterId)
+    }
 
     return jsonNoStore({ success: true })
   } catch (error: unknown) {

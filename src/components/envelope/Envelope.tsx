@@ -7,20 +7,20 @@ import Mascot, { MascotCharacter, MascotExpression } from '@/components/Mascot'
 import { useWelcome } from '@/lib/envelope/WelcomeContext'
 
 export default function Envelope() {
-  const { state, loading, markRead } = useWelcome()
+  const { state, loading, isEnvelopeOpen, closeEnvelope } = useWelcome()
   const [isOpen, setIsOpen] = useState(false)
   const [isOpening, setIsOpening] = useState(false)
   const shouldReduceMotion = useReducedMotion()
 
-  // Reset internal open states when a new letter comes or is dismissed
+  // Reset internal open states when letter changes or is closed
   useEffect(() => {
-    if (!state?.letter || state.letter.is_read) {
+    if (!isEnvelopeOpen || !state?.letter || state.letter.is_read) {
       setIsOpen(false)
       setIsOpening(false)
     }
-  }, [state])
+  }, [isEnvelopeOpen, state])
 
-  if (loading || !state?.letter || state.letter.is_read || state.presentation_type !== 'envelope') {
+  if (loading || !isEnvelopeOpen || !state?.letter || state.letter.is_read) {
     return null
   }
 
@@ -28,6 +28,7 @@ export default function Envelope() {
   const character = (state.mascot_character || 'munch') as MascotCharacter
   const expression = (state.mascot_expression || 'happy') as MascotExpression
   const messageContent = letter.content
+  const mascotName = character.charAt(0).toUpperCase() + character.slice(1)
 
   const handleOpenSequence = () => {
     if (isOpening || isOpen) return
@@ -38,80 +39,36 @@ export default function Envelope() {
     if (e) e.stopPropagation()
     setIsOpen(false)
     setIsOpening(false)
-    // Mark as read in backend
-    await markRead(letter.id)
+    await closeEnvelope()
   }
-
-  // Envelope Container Animation variants (entrance, exit, and idle states)
-  const containerVariants: Variants = {
-    initial: {
-      opacity: 0,
-      scale: 0.8,
-      y: 50,
-    },
-    closed: {
-      opacity: 1,
-      y: shouldReduceMotion ? 0 : [0, -6, 0],
-      scale: shouldReduceMotion ? 1 : [1, 1.02, 1],
-      transition: {
-        y: {
-          duration: 6,
-          repeat: Infinity,
-          ease: 'easeInOut' as const,
-        },
-        scale: {
-          duration: 4.5,
-          repeat: Infinity,
-          ease: 'easeInOut' as const,
-        },
-        opacity: { duration: 0.5 },
-      },
-    },
-    opened: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.5,
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.8,
-      y: 100,
-      transition: {
-        duration: 0.4,
-      },
-    },
-  }
-
-  // Capitalize name helper
-  const mascotName = character.charAt(0).toUpperCase() + character.slice(1)
 
   return (
     <AnimatePresence>
       <div 
-        className="fixed z-50 bottom-24 right-4 sm:right-8 sm:bottom-24"
-        role="region"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/25 backdrop-blur-xs"
+        role="dialog"
+        aria-modal="true"
         aria-label="A personal letter from Munch"
+        onClick={handleClose}
       >
         <motion.div
-          variants={containerVariants}
-          initial="initial"
-          animate={isOpening || isOpen ? 'opened' : 'closed'}
-          exit="exit"
-          className="relative flex items-center justify-center p-2 select-none"
+          initial={{ opacity: 0, scale: 0.85, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.85, y: 30 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className="relative flex items-center justify-center select-none"
+          onClick={(e) => e.stopPropagation()}
         >
-          {/* Close / Dismiss Button */}
+          {/* Close Button */}
           <button
             onClick={handleClose}
             aria-label="Close letter"
-            className="absolute -top-2 -right-2 p-1.5 rounded-full bg-white/90 border border-white text-charcoal/60 hover:text-charcoal/90 hover:bg-white shadow-md z-50 cursor-pointer transition-all"
+            className="absolute -top-3 -right-3 p-2 rounded-full bg-white/95 border border-white text-charcoal/70 hover:text-charcoal hover:bg-white shadow-lg z-50 cursor-pointer transition-all active:scale-95"
           >
             <X className="w-4 h-4" />
           </button>
 
-          {/* Envelope Wrapper */}
+          {/* Envelope Body */}
           <div 
             tabIndex={isOpening || isOpen ? -1 : 0}
             role="button"
@@ -123,81 +80,57 @@ export default function Envelope() {
                 handleOpenSequence()
               }
             }}
-            className="relative w-72 h-44 bg-[#E9D7C8] rounded-2xl shadow-xl overflow-visible cursor-pointer flex items-center justify-center border border-white/20 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary-dark"
-            style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
+            className="relative w-80 h-52 sm:w-96 sm:h-60 bg-[#E9D7C8] rounded-3xl shadow-2xl overflow-visible cursor-pointer flex items-center justify-center border border-white/40 focus:outline-none focus:ring-4 focus:ring-primary/40"
+            style={{ perspective: '1200px', transformStyle: 'preserve-3d' }}
           >
-            {/* Subtle Envelope Glow */}
-            {!isOpening && !isOpen && (
-              <motion.div
-                animate={{
-                  boxShadow: [
-                    '0 0 12px rgba(240, 199, 212, 0.25)',
-                    '0 0 24px rgba(240, 199, 212, 0.55)',
-                    '0 0 12px rgba(240, 199, 212, 0.25)'
-                  ]
-                }}
-                transition={{
-                  duration: 4.5,
-                  repeat: Infinity,
-                  ease: 'easeInOut'
-                }}
-                className="absolute inset-0 rounded-2xl -z-10 pointer-events-none"
-              />
-            )}
-            
-            {/* 1. RIBBON & BOW */}
+            {/* Ribbon & Bow */}
             <AnimatePresence>
               {!isOpening && !isOpen && (
                 <>
-                  {/* Vertical Ribbon */}
                   <motion.div
-                    exit={shouldReduceMotion ? { opacity: 0 } : { y: -80, opacity: 0, transition: { duration: 0.4 } }}
-                    className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 bg-[#F0C7D4] z-30 shadow-sm border-x border-[#e8b6c5]"
+                    exit={shouldReduceMotion ? { opacity: 0 } : { y: -90, opacity: 0, transition: { duration: 0.35 } }}
+                    className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-10 bg-[#F0C7D4] z-30 shadow-xs border-x border-[#e8b6c5]"
                   />
-                  {/* Horizontal Ribbon */}
                   <motion.div
-                    exit={shouldReduceMotion ? { opacity: 0 } : { x: -120, opacity: 0, transition: { duration: 0.4 } }}
-                    className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-8 bg-[#F0C7D4] z-30 shadow-sm border-y border-[#e8b6c5]"
+                    exit={shouldReduceMotion ? { opacity: 0 } : { x: -140, opacity: 0, transition: { duration: 0.35 } }}
+                    className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-10 bg-[#F0C7D4] z-30 shadow-xs border-y border-[#e8b6c5]"
                   />
                 </>
               )}
             </AnimatePresence>
 
-            {/* 2. WAX SEAL */}
+            {/* Wax Seal */}
             <AnimatePresence>
               {!isOpening && !isOpen && (
                 <motion.div
-                  exit={{ scale: 0.4, opacity: 0, transition: { delay: 0.2, duration: 0.3 } }}
-                  className="absolute z-40 w-12 h-12 rounded-full bg-[#C48A7A] border-2 border-[#b57a6b] flex items-center justify-center shadow-lg cursor-pointer"
+                  exit={{ scale: 0.3, opacity: 0, transition: { delay: 0.1, duration: 0.3 } }}
+                  className="absolute z-40 w-14 h-14 rounded-full bg-[#C48A7A] border-2 border-[#b57a6b] flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
                 >
-                  <Heart className="w-5 h-5 text-white/80 fill-white/10" />
+                  <Heart className="w-6 h-6 text-white/90 fill-white/20" />
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* 3. ENVELOPE FLAPS */}
-            {/* Left Flap */}
+            {/* Envelope Flaps */}
             <div 
-              className="absolute inset-y-0 left-0 w-[51%] bg-[#D8B4A0] z-20"
+              className="absolute inset-y-0 left-0 w-[51%] bg-[#D8B4A0] z-20 rounded-l-3xl"
               style={{ clipPath: 'polygon(0 0, 100% 50%, 0 100%)' }}
             />
-            {/* Right Flap */}
             <div 
-              className="absolute inset-y-0 right-0 w-[51%] bg-[#D8B4A0] z-20"
+              className="absolute inset-y-0 right-0 w-[51%] bg-[#D8B4A0] z-20 rounded-r-3xl"
               style={{ clipPath: 'polygon(100% 0, 0 50%, 100% 100%)' }}
             />
-            {/* Bottom Flap */}
             <div 
-              className="absolute inset-x-0 bottom-0 h-[52%] bg-[#E9D7C8] z-21"
+              className="absolute inset-x-0 bottom-0 h-[52%] bg-[#E9D7C8] z-21 rounded-b-3xl"
               style={{ clipPath: 'polygon(0 100%, 50% 0, 100% 100%)' }}
             />
             
-            {/* Top Flap (3D Swing Open) */}
+            {/* Top Flap */}
             <motion.div
               initial={{ rotateX: 0 }}
               animate={isOpening || isOpen ? { rotateX: 180, zIndex: 5 } : { rotateX: 0, zIndex: 25 }}
-              transition={shouldReduceMotion ? { duration: 0.1 } : { delay: 0.4, duration: 0.5, ease: 'easeInOut' }}
-              className="absolute inset-x-0 top-0 h-[52%] bg-[#D8B4A0] origin-top"
+              transition={shouldReduceMotion ? { duration: 0.1 } : { delay: 0.3, duration: 0.5, ease: 'easeInOut' }}
+              className="absolute inset-x-0 top-0 h-[52%] bg-[#D8B4A0] origin-top rounded-t-3xl"
               style={{ 
                 clipPath: 'polygon(0 0, 50% 100%, 100% 0)',
                 transformStyle: 'preserve-3d',
@@ -205,58 +138,56 @@ export default function Envelope() {
               }}
             />
 
-            {/* 4. LETTER CARD (Slides upward out of body) */}
+            {/* Letter Card */}
             <motion.div
               initial={{ y: 0, scale: 0.95 }}
-              animate={isOpening || isOpen ? { y: -130, scale: 1 } : { y: 0, scale: 0.95 }}
-              transition={shouldReduceMotion ? { duration: 0.2 } : { delay: 0.8, duration: 0.7, ease: 'easeOut' }}
+              animate={isOpening || isOpen ? { y: -160, scale: 1.05 } : { y: 0, scale: 0.95 }}
+              transition={shouldReduceMotion ? { duration: 0.2 } : { delay: 0.7, duration: 0.6, ease: 'easeOut' }}
               onAnimationComplete={() => {
                 if (isOpening) setIsOpen(true)
               }}
-              className="absolute z-10 w-[92%] h-[92%] rounded-xl p-4 shadow-md flex flex-col justify-between border border-white/40 bg-[#F8F4EF] text-charcoal"
+              className="absolute z-10 w-[94%] h-[94%] rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col justify-between border border-white/60 bg-[#FCFAF7] text-charcoal"
             >
-              {/* Note Content */}
               <div className="space-y-2 flex-grow overflow-y-auto pr-1 scrollbar-thin">
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={isOpen ? { opacity: 1 } : { opacity: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
-                  className="font-serif italic text-xs leading-relaxed text-charcoal/90 pt-1 text-left"
+                  className="font-serif italic text-xs sm:text-sm leading-relaxed text-charcoal/90 pt-1 text-left"
                 >
-                  <span className="font-display font-black text-2xs block uppercase tracking-wider text-primary-dark/80 not-italic mb-1.5">
-                    A Note from {mascotName} 🍀
+                  <span className="font-display font-black text-2xs sm:text-xs block uppercase tracking-wider text-primary-dark not-italic mb-2 border-b border-primary/15 pb-1">
+                    A Gentle Note from {mascotName} 🍀
                   </span>
                   {messageContent}
                 </motion.div>
               </div>
 
-              {/* Signature Row */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={isOpen ? { opacity: 1 } : { opacity: 0 }}
                 transition={{ delay: 0.3, duration: 0.4 }}
-                className="flex justify-between items-end border-t border-charcoal/10 pt-1.5"
+                className="flex justify-between items-end border-t border-charcoal/10 pt-2"
               >
-                <span className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest">
+                <span className="text-[10px] font-bold text-charcoal/50 uppercase tracking-widest font-poppins">
                   Your Companion
                 </span>
-                <span className="font-display font-black text-xs text-primary-dark capitalize">
+                <span className="font-display font-black text-xs sm:text-sm text-primary-dark capitalize">
                   {character} 🍀
                 </span>
               </motion.div>
             </motion.div>
 
-            {/* 5. MASCOT INTEGRATION (Floating next to open letter) */}
+            {/* Companion Mascot */}
             <AnimatePresence>
               {isOpen && (
                 <motion.div
-                  initial={{ scale: 0, opacity: 0, x: -30 }}
+                  initial={{ scale: 0, opacity: 0, x: -40 }}
                   animate={{ scale: 1, opacity: 1, x: 0 }}
                   exit={{ scale: 0, opacity: 0, x: -20 }}
-                  transition={shouldReduceMotion ? { duration: 0.2 } : { delay: 0.3, duration: 0.4, type: 'spring', stiffness: 120 }}
-                  className="absolute z-20 -left-12 -bottom-2"
+                  transition={shouldReduceMotion ? { duration: 0.2 } : { delay: 0.35, duration: 0.45, type: 'spring', stiffness: 120 }}
+                  className="absolute z-20 -left-12 sm:-left-16 -bottom-6"
                 >
-                  <Mascot character={character} expression={expression} size="sm" className="drop-shadow-lg" />
+                  <Mascot character={character} expression={expression} size="md" className="drop-shadow-xl" />
                 </motion.div>
               )}
             </AnimatePresence>
