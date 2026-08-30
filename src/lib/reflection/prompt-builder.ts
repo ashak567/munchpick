@@ -12,6 +12,8 @@ import {
   ProviderHints
 } from './types';
 import { estimateTokens } from './context-assembly';
+import { MASCOT_SELF_IDENTITIES } from '../mascots/self-identity';
+import { MascotCharacter } from '../mascots/registry';
 
 /**
  * Prompt Builder Engine.
@@ -57,6 +59,7 @@ export class PromptBuilderEngine implements CognitiveEngine {
     // 2. Identity Section
     const mascot = trace.mascotDecision;
     if (mascot) {
+      const selfIdentity = MASCOT_SELF_IDENTITIES[mascot.mascotId as MascotCharacter] || MASCOT_SELF_IDENTITIES.munch;
       sections.push({
         id: 'mascot_identity_' + mascot.mascotId,
         type: 'identity',
@@ -64,11 +67,26 @@ export class PromptBuilderEngine implements CognitiveEngine {
         required: true,
         content: {
           mascotId: mascot.mascotId,
+          displayName: selfIdentity.displayName,
+          species: selfIdentity.species,
+          aliases: selfIdentity.aliases,
           identity: mascot.identity,
           behavior: mascot.behavior,
           speakingStyle: mascot.speakingStyle,
           emotionalStyle: mascot.emotionalStyle,
-          interactionStyle: mascot.interactionStyle
+          interactionStyle: mascot.interactionStyle,
+          selfAwarenessPersona: selfIdentity.selfAwarenessPersona,
+          selfAwarenessGuidance:
+            "You have a distinct sense of self as this companion. When the user discusses you, your name, 'you', nicknames, or references building or troubleshooting you, respond naturally in first-person ('I', 'me', 'my', 'myself') in character. Never use 'I'm just an AI' or deny feelings.",
+          voiceDetails: {
+            vocabularyTheme: selfIdentity.voice.vocabulary,
+            rhythmAndPacing: selfIdentity.voice.rhythmAndPacing,
+            questionStyle: selfIdentity.voice.questionStyle,
+            emotionalFraming: selfIdentity.voice.emotionalFraming,
+            metaphorDomain: selfIdentity.voice.metaphorDomain,
+            firstTurnStyleAnchor: selfIdentity.voice.firstTurnStyleAnchor,
+            antiBleedRules: selfIdentity.voice.antiBleedRules
+          }
         }
       });
     }
@@ -168,7 +186,7 @@ export class PromptBuilderEngine implements CognitiveEngine {
       type: 'instructions',
       priority: 0.2,
       required: true,
-      content: 'Construct the response strictly adhering to the response plan sections, personality guidelines, and active mascot speaking style. Respond directly to the CURRENT_USER_MESSAGE. RECENT_CONVERSATION_HISTORY provides past dialogue context for continuity—use it to understand the ongoing conversation and avoid repeating previous assistant replies or questions. COGNITIVE_REFLECTIONS are internal cognitive insights—do not copy their wording verbatim; express their meaning naturally. FORBIDDEN_PREVIOUS_RESPONSES lists exact prior replies—never reproduce them. Do not leak internal tags, priorities, or cognitive scores in the output.'
+      content: 'Construct the response strictly adhering to the response plan sections, personality guidelines, and active mascot speaking style. Respond directly to the CURRENT_USER_MESSAGE. If the user discusses you, your name, or your behavior/creation, acknowledge it with natural self-awareness in character. RECENT_CONVERSATION_HISTORY provides past dialogue context for continuity—use it to understand the ongoing conversation and avoid repeating previous assistant replies or questions. COGNITIVE_REFLECTIONS are internal cognitive insights—do not copy their wording verbatim; express their meaning naturally. FORBIDDEN_PREVIOUS_RESPONSES lists exact prior replies—never reproduce them. Do not leak internal tags, priorities, or cognitive scores in the output.'
     });
 
     // Sort by priority descending
@@ -215,11 +233,19 @@ export class PromptBuilderEngine implements CognitiveEngine {
       }
     }
 
+    if (mascot) {
+      const selfIdentity = MASCOT_SELF_IDENTITIES[mascot.mascotId as MascotCharacter] || MASCOT_SELF_IDENTITIES.munch;
+      mustDo.push(`Adhere strictly to ${selfIdentity.displayName}'s voice: ${selfIdentity.voice.rhythmAndPacing}`);
+      avoid.push(selfIdentity.voice.antiBleedRules);
+    }
+
     mustDo.push('Respond primarily to the CURRENT_USER_MESSAGE.');
     mustDo.push('Do not repeat previous assistant responses provided in RECENT_CONVERSATION_HISTORY.');
     mustDo.push('Express the semantic meaning of cognitive insights naturally without copying reflection wording verbatim.');
+    shouldDo.push('When addressed directly or discussed, speak with authentic companion self-awareness in first-person.');
     avoid.push('Do not reuse identical opening sentences from previous turns.');
     avoid.push('Do not ask the same follow-up question unless the user ignored it.');
+    avoid.push('Do not say "I am just an AI" or deny feelings and personality during companion conversation.');
 
     const directives: PromptDirective = { mustDo, shouldDo, avoid };
 

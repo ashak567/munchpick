@@ -22,6 +22,7 @@ import { PresenceExperienceManager } from '@/components/companion/PresenceExperi
 import { InteractionCoordinator } from '@/components/companion/InteractionCoordinator'
 import { MOTION_SYSTEM_VARIANTS } from '@/components/workspace/motion-system'
 import { useWelcome } from '@/lib/envelope/WelcomeContext'
+import { useTheme } from '@/lib/theme/ThemeContext'
 
 interface ChatMessage {
   id: string
@@ -241,9 +242,11 @@ export default function DashboardPage() {
   // "Today I Learned" (TIL) state
   const [tilMessage, setTilMessage] = useState<string | null>(null)
 
+  const { resolvedTheme } = useTheme()
+
   const activeTheme: EnvironmentTheme = {
     time: getThemeTime(),
-    userPreference: typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+    userPreference: resolvedTheme,
     accessibility: convOutput.profile === 'reduced-motion' ? 'reduced-motion' : 'standard',
     mascotPalette: getThemePalette(activeMascot)
   }

@@ -14,12 +14,16 @@ import {
   X, 
   Camera, 
   Trash2,
-  Check
+  Check,
+  Sun,
+  Moon,
+  Clock
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import Mascot from '@/components/Mascot'
 import { MASCOT_REGISTRY, MascotCharacter } from '@/lib/mascots/registry'
 import { useConversationPresence } from '@/hooks/useConversationPresence'
+import { useTheme } from '@/lib/theme/ThemeContext'
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null)
@@ -40,6 +44,7 @@ export default function ProfilePage() {
 
   // Pacing/accessibility preferences from hook
   const { preferences, setPreferences } = useConversationPresence()
+  const { themeMode, resolvedTheme, setThemeMode } = useTheme()
 
   useEffect(() => {
     async function loadProfile() {
@@ -411,27 +416,82 @@ export default function ProfilePage() {
           <span className="text-[10px] font-black uppercase tracking-wider text-charcoal/40 block mb-4">
             Workspace Preferences
           </span>
-          <div className="space-y-4">
-            {/* Animation motion pacing */}
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-charcoal block">Reduced Motion</span>
-                <span className="text-2xs text-charcoal/40 font-medium block mt-0.5">
-                  Saves battery and simplifies breathing loops for companions.
+          <div className="space-y-6">
+            {/* Theme Mode Selector */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <span className="text-xs font-bold text-charcoal block">Day / Night Theme</span>
+                  <span className="text-2xs text-charcoal/40 font-medium block mt-0.5">
+                    Auto switches at 6:00 AM (Light) and 6:00 PM (Dark) local time.
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-charcoal/5 text-charcoal/60 capitalize">
+                  Currently {resolvedTheme}
                 </span>
               </div>
-              <button
-                onClick={() => setPreferences({ profile: preferences.profile === 'reduced-motion' ? 'standard' : 'reduced-motion' })}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                  preferences.profile === 'reduced-motion' ? 'bg-primary-dark' : 'bg-charcoal/20'
-                }`}
-              >
-                <div 
-                  className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
-                    preferences.profile === 'reduced-motion' ? 'left-6' : 'left-1'
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setThemeMode('auto')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    themeMode === 'auto'
+                      ? 'bg-primary-dark text-white border-primary-dark shadow-2xs'
+                      : 'bg-white/80 hover:bg-cream/40 text-charcoal/70 border-charcoal/10'
                   }`}
-                />
-              </button>
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Auto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThemeMode('light')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-primary-dark text-white border-primary-dark shadow-2xs'
+                      : 'bg-white/80 hover:bg-cream/40 text-charcoal/70 border-charcoal/10'
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5" />
+                  <span>Light</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThemeMode('dark')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    themeMode === 'dark'
+                      ? 'bg-primary-dark text-white border-primary-dark shadow-2xs'
+                      : 'bg-white/80 hover:bg-cream/40 text-charcoal/70 border-charcoal/10'
+                  }`}
+                >
+                  <Moon className="w-3.5 h-3.5" />
+                  <span>Dark</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-charcoal/5 pt-4">
+              {/* Animation motion pacing */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-charcoal block">Reduced Motion</span>
+                  <span className="text-2xs text-charcoal/40 font-medium block mt-0.5">
+                    Saves battery and simplifies breathing loops for companions.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setPreferences({ profile: preferences.profile === 'reduced-motion' ? 'standard' : 'reduced-motion' })}
+                  className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                    preferences.profile === 'reduced-motion' ? 'bg-primary-dark' : 'bg-charcoal/20'
+                  }`}
+                >
+                  <div 
+                    className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${
+                      preferences.profile === 'reduced-motion' ? 'left-6' : 'left-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
         </div>

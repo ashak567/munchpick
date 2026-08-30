@@ -20,6 +20,11 @@
   --bottom-nav-height: 72px;
 }
 
+html.dark, body.dark, .dark-theme {
+  --background: #0C0F1A;
+  --foreground: #F3F4F6;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
@@ -31,6 +36,14 @@ body {
   background-attachment: fixed;
   background-size: cover;
   min-height: 100%;
+  transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+html.dark body, body.dark-theme {
+  background-image: 
+    radial-gradient(at 10% 10%, rgba(205, 180, 255, 0.06) 0px, transparent 50%),
+    radial-gradient(at 90% 10%, rgba(143, 217, 168, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(15, 23, 42, 0.9) 0px, transparent 50%);
 }
 
 /* Scrollbar custom styles */
@@ -70,12 +83,25 @@ body {
   box-shadow: 0 8px 32px 0 rgba(143, 217, 168, 0.08);
 }
 
+html.dark .glass-panel, .dark-theme .glass-panel {
+  background: rgba(21, 27, 48, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: 0 4px 20px 0 rgba(74, 74, 74, 0.04);
+}
+
+html.dark .glass-card, .dark-theme .glass-card {
+  background: rgba(28, 36, 62, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.25);
+  color: #E2E8F0;
 }
 
 /* 3D Claymorphism Elements */

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Baloo_2, Poppins } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/lib/theme/ThemeContext";
 
 const baloo = Baloo_2({
   variable: "--font-baloo",
@@ -35,7 +36,9 @@ export default function RootLayout({
       className={`${baloo.variable} ${poppins.variable} h-full antialiased`}
     >
       <body className="min-h-[100dvh] flex flex-col antialiased">
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

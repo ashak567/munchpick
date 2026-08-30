@@ -21,9 +21,12 @@ import {
   ImportanceObservation,
   RelationshipReferenceObservation,
   SelfReflectionObservation,
-  EmotionalReadinessObservation
+  EmotionalReadinessObservation,
+  SelfReferenceObservation
 } from './types';
 import { normalizeConfidence, buildEvidenceContext } from './confidence';
+import { detectSelfReference } from '../mascots/self-identity';
+import { MascotCharacter } from '../mascots/registry';
 
 /**
  * Perform a keyword and regex-based NLU analysis of the context package.
@@ -688,6 +691,26 @@ export function analyzeContextFallback(context: ContextPackage): NLUObservations
     });
   }
 
+  // 21. Character Self-Reference & Disambiguation
+  const self_references: SelfReferenceObservation[] = [];
+  const activeChar = (context.active_mascot || 'munch') as MascotCharacter;
+  const historyTurns = (context.conversation_history || []).map(h => ({
+    role: h.role,
+    content: h.content
+  }));
+  const selfRefResult = detectSelfReference(input, activeChar, historyTurns);
+  if (selfRefResult.isSelfReference) {
+    self_references.push({
+      is_self_reference: true,
+      character_id: selfRefResult.mascotId,
+      reference_type: selfRefResult.referentialType,
+      reference_phrase: selfRefResult.referencePhrase || input,
+      contextual_summary: selfRefResult.contextualReason,
+      confidence: normalizeConfidence(selfRefResult.confidence),
+      evidence: buildEvidenceContext('user_input', selfRefResult.referencePhrase || input.slice(0, 80))
+    });
+  }
+
   return {
     meanings,
     topics,
@@ -711,6 +734,7 @@ export function analyzeContextFallback(context: ContextPackage): NLUObservations
     importances,
     relationship_references,
     reflections,
-    readiness_signals
+    readiness_signals,
+    self_references
   };
 }

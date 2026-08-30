@@ -220,6 +220,18 @@ export interface NLUObservationsOutput {
   relationship_references: RelationshipReferenceObservation[];
   reflections: SelfReflectionObservation[];
   readiness_signals: EmotionalReadinessObservation[];
+  self_references?: SelfReferenceObservation[];
+}
+
+/**
+ * Self-Reference Observation
+ */
+export interface SelfReferenceObservation extends NLUConfidence {
+  is_self_reference: boolean;
+  character_id: string;
+  reference_type: string;
+  reference_phrase: string;
+  contextual_summary: string;
 }
 
 /**

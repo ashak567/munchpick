@@ -4,9 +4,11 @@ import React from 'react'
 import { useWelcome } from '@/lib/envelope/WelcomeContext'
 import { usePathname } from 'next/navigation'
 import AmbientBackground from '@/components/motion/AmbientBackground'
+import { useTheme } from '@/lib/theme/ThemeContext'
 
 export default function WelcomeLayoutWrapper({ children }: { children: React.ReactNode }) {
   const { state } = useWelcome()
+  const { resolvedTheme } = useTheme()
   const pathname = usePathname()
   const isChatRoute = pathname === '/dashboard'
 
@@ -19,15 +21,17 @@ export default function WelcomeLayoutWrapper({ children }: { children: React.Rea
     twilight_glow: 'bg-gradient-to-b from-indigo-50/70 via-purple-50/40 to-pink-100/20',
     midnight_peace: 'bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 text-white/90',
     clover_garden: 'bg-gradient-to-b from-emerald-50/40 via-cream to-teal-50/30',
-    default: 'bg-cream'
+    default: resolvedTheme === 'dark' ? 'bg-[#0C0F1A]' : 'bg-cream'
   }
 
-  const bgClass = bgClasses[scene] || bgClasses.default
+  const bgClass = resolvedTheme === 'dark' && scene === 'default'
+    ? 'bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 text-white/90'
+    : (bgClasses[scene] || bgClasses.default)
 
   return (
     <div 
       className={`h-[100dvh] w-full flex flex-col relative transition-all duration-1000 overflow-hidden ${
-        scene === 'midnight_peace' ? 'dark-theme' : ''
+        resolvedTheme === 'dark' || scene === 'midnight_peace' ? 'dark-theme' : ''
       } ${bgClass}`}
     >
       {/* Background Particles */}
