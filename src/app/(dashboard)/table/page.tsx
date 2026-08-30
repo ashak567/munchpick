@@ -5,7 +5,7 @@ import { MunchTableStage } from '@/components/table/MunchTableStage';
 
 export default function MunchTablePage() {
   return (
-    <div className="relative w-full h-[calc(100vh-4rem)] flex flex-col">
+    <div className="relative w-full h-full flex-1 flex flex-col min-h-0 overflow-hidden">
       <MunchTableStage />
     </div>
   );

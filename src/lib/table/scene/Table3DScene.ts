@@ -35,14 +35,20 @@ export class Table3DScene {
   private tableSpotlight!: THREE.SpotLight;
   private speakerLight!: THREE.PointLight;
 
-  // Camera & Interaction
-  private targetCameraPos: THREE.Vector3 = new THREE.Vector3(0, 5.5, 7.5);
-  private targetLookAt: THREE.Vector3 = new THREE.Vector3(0, 0.5, 0);
-  private currentLookAt: THREE.Vector3 = new THREE.Vector3(0, 0.5, 0);
+  // Camera & Orbit Controller
   private cameraViewMode: CameraViewMode = 'overview';
   private activeSpeakerId: MascotCharacter | 'user' | null = null;
 
-  private mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
+  // Spherical Orbit Coordinates (radius, phi elevation, theta azimuth)
+  private spherical = { radius: 7.2, phi: 0.88, theta: 0 };
+  private targetSpherical = { radius: 7.2, phi: 0.88, theta: 0 };
+  private targetLookAt = new THREE.Vector3(0, 0.85, 0);
+  private currentLookAt = new THREE.Vector3(0, 0.85, 0);
+
+  // Interaction State
+  private isPointerDown = false;
+  private pointerStart = { x: 0, y: 0 };
+  private mouseParallax = { x: 0, y: 0, targetX: 0, targetY: 0 };
   private isReducedMotion = false;
   private isDarkTheme = false;
 
@@ -55,193 +61,200 @@ export class Table3DScene {
     this.isReducedMotion = isReduced;
     this.clock = new THREE.Clock();
 
-    // 1. Scene & Background
+    // 1. Scene setup (Transparent background to let global AmbientBackground show through)
     this.scene = new THREE.Scene();
-    this.updateBackgroundTheme(isDark);
+    this.scene.background = null;
 
-    // 2. Camera
-    const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
-    this.camera = new THREE.PerspectiveCamera(42, aspect, 0.1, 100);
-    this.camera.position.copy(this.targetCameraPos);
+    // 2. Camera Setup with Mobile-aware Initial Framing
+    const width = Math.max(container.clientWidth, 1);
+    const height = Math.max(container.clientHeight, 1);
+    const aspect = width / height;
+    const isMobile = aspect < 1.0;
 
-    // 3. Renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
+    // Adjust camera field of view and distance based on viewport aspect ratio
+    const initialFov = isMobile ? 48 : 38;
+    const initialRadius = isMobile ? 8.6 : 7.2;
+    this.spherical.radius = initialRadius;
+    this.targetSpherical.radius = initialRadius;
+
+    this.camera = new THREE.PerspectiveCamera(initialFov, aspect, 0.1, 100);
+    this.updateCameraPositionDirect();
+
+    // 3. Renderer with full transparency & high performance
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
+    this.renderer.setSize(width, height);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.0));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
-    // Attach canvas to DOM
+    // Ensure touch interactions don't scroll the parent page
+    this.renderer.domElement.style.touchAction = 'none';
+    this.renderer.domElement.style.width = '100%';
+    this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.display = 'block';
+
     this.container.appendChild(this.renderer.domElement);
 
-    // 4. Setup Lighting, Room, Table, Seats, and Characters
+    // 4. Setup Lights, Floating Dais, Table, Seats, and Characters
     this.charactersGroup = new THREE.Group();
     this.scene.add(this.charactersGroup);
 
     this.setupLighting();
-    this.setupRoom();
+    this.setupFloatingDais();
     this.setupTable();
     this.calculateSeats();
     this.setupCharacters();
 
-    // 5. Attach event listeners & start loop
+    // 5. Setup Listeners & Animation Loop
     this.setupEventListeners();
     this.startAnimationLoop();
   }
 
-  private updateBackgroundTheme(isDark: boolean) {
-    if (isDark) {
-      this.scene.background = new THREE.Color(0x0a0d17);
-      this.scene.fog = new THREE.FogExp2(0x0a0d17, 0.035);
-    } else {
-      this.scene.background = new THREE.Color(0xfcf6ef);
-      this.scene.fog = new THREE.FogExp2(0xfcf6ef, 0.025);
-    }
-  }
-
   private setupLighting() {
     this.ambientLight = new THREE.AmbientLight(
-      this.isDarkTheme ? 0x6a7d9b : 0xfff2e0,
-      this.isDarkTheme ? 0.7 : 1.2
+      this.isDarkTheme ? 0x8295b3 : 0xfff6ea,
+      this.isDarkTheme ? 0.9 : 1.3
     );
     this.scene.add(this.ambientLight);
 
-    // Main Sun / Moon Key Light
+    // Main Sunlight / Moonlight Directional Light
     this.mainLight = new THREE.DirectionalLight(
-      this.isDarkTheme ? 0x93b4ff : 0xfff6ea,
-      this.isDarkTheme ? 1.0 : 1.6
+      this.isDarkTheme ? 0xaad0ff : 0xfffaf0,
+      this.isDarkTheme ? 1.2 : 1.7
     );
-    this.mainLight.position.set(5, 10, 6);
+    this.mainLight.position.set(4, 9, 5);
     this.mainLight.castShadow = true;
     this.mainLight.shadow.mapSize.width = 1024;
     this.mainLight.shadow.mapSize.height = 1024;
-    this.mainLight.shadow.bias = -0.0005;
+    this.mainLight.shadow.bias = -0.0004;
     this.scene.add(this.mainLight);
 
-    // Center Table Warm Spotlight
+    // Center Table Spotlight for focus
     this.tableSpotlight = new THREE.SpotLight(
-      this.isDarkTheme ? 0x8fd9a8 : 0xffe08a,
-      this.isDarkTheme ? 1.5 : 1.8,
-      12,
-      Math.PI / 3.5,
-      0.5,
+      this.isDarkTheme ? 0x8fd9a8 : 0xffebad,
+      this.isDarkTheme ? 1.6 : 1.9,
+      14,
+      Math.PI / 3.2,
+      0.45,
       1.0
     );
-    this.tableSpotlight.position.set(0, 5, 0);
-    this.tableSpotlight.target.position.set(0, 0, 0);
+    this.tableSpotlight.position.set(0, 5.5, 0);
+    this.tableSpotlight.target.position.set(0, 0.85, 0);
     this.scene.add(this.tableSpotlight);
     this.scene.add(this.tableSpotlight.target);
 
     // Active Speaker Pointlight
-    this.speakerLight = new THREE.PointLight(0x8fd9a8, 0, 6);
+    this.speakerLight = new THREE.PointLight(0x8fd9a8, 0, 5);
     this.speakerLight.position.set(0, 2, 0);
     this.scene.add(this.speakerLight);
   }
 
-  private setupRoom() {
+  private setupFloatingDais() {
     this.roomGroup = new THREE.Group();
 
-    // Floor
-    const floorGeo = new THREE.CircleGeometry(9, 64);
+    // 1. Floating Circular Pavilion Floor
+    const floorGeo = new THREE.CylinderGeometry(4.6, 4.8, 0.25, 48);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: this.isDarkTheme ? 0x121728 : 0xf4ebe1,
-      roughness: 0.8,
-      metalness: 0.1
+      color: this.isDarkTheme ? 0x161d2d : 0xfcf8f2,
+      roughness: 0.75,
+      metalness: 0.08
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.125;
     floor.receiveShadow = true;
     this.roomGroup.add(floor);
 
-    // Room Outer Wall / Backdrop
-    const wallGeo = new THREE.CylinderGeometry(9, 9, 7, 32, 1, true, -Math.PI * 0.75, Math.PI * 1.5);
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: this.isDarkTheme ? 0x182035 : 0xfaeee0,
-      side: THREE.BackSide,
-      roughness: 0.9
+    // 2. Beveled Rim Edge
+    const rimGeo = new THREE.TorusGeometry(4.7, 0.08, 16, 48);
+    const rimMat = new THREE.MeshStandardMaterial({
+      color: this.isDarkTheme ? 0x27344f : 0xe7dacb,
+      roughness: 0.5
     });
-    const wall = new THREE.Mesh(wallGeo, wallMat);
-    wall.position.y = 3.5;
-    this.roomGroup.add(wall);
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.01;
+    this.roomGroup.add(rim);
 
-    // Decorative floor ring (Munch moss/soft boundary)
-    const ringGeo = new THREE.RingGeometry(3.6, 3.8, 64);
+    // 3. Soft Ambient Glow Halo Ring on Floor (Munch emerald signature)
+    const ringGeo = new THREE.RingGeometry(3.6, 4.2, 48);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: this.isDarkTheme ? 0x3d5c48 : 0x8fd9a8,
+      color: this.isDarkTheme ? 0x8fd9a8 : 0x8fd9a8,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.35
+      opacity: this.isDarkTheme ? 0.22 : 0.28
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.01;
+    ring.position.y = 0.015;
     this.roomGroup.add(ring);
 
     this.scene.add(this.roomGroup);
   }
 
   private setupTable() {
-    // 1. Tabletop
-    const tableTopGeo = new THREE.CylinderGeometry(2.4, 2.4, 0.15, 64);
+    // 1. Warm Polished Tabletop
+    const tableTopGeo = new THREE.CylinderGeometry(2.3, 2.3, 0.14, 48);
     const tableTopMat = new THREE.MeshStandardMaterial({
-      color: this.isDarkTheme ? 0x222c42 : 0xfffcf7,
-      roughness: 0.4,
-      metalness: 0.1
+      color: this.isDarkTheme ? 0x242e42 : 0xfffaf2,
+      roughness: 0.35,
+      metalness: 0.05
     });
     this.tableMesh = new THREE.Mesh(tableTopGeo, tableTopMat);
-    this.tableMesh.position.y = 1.0;
+    this.tableMesh.position.y = 0.95;
     this.tableMesh.castShadow = true;
     this.tableMesh.receiveShadow = true;
     this.scene.add(this.tableMesh);
 
-    // 2. Table Leg / Pedestal
-    const legGeo = new THREE.CylinderGeometry(0.5, 0.9, 1.0, 32);
+    // 2. Table Pedestal Leg
+    const legGeo = new THREE.CylinderGeometry(0.45, 0.85, 0.95, 24);
     const legMat = new THREE.MeshStandardMaterial({
-      color: this.isDarkTheme ? 0x161e30 : 0xe7dacb,
-      roughness: 0.7
+      color: this.isDarkTheme ? 0x182030 : 0xede0d2,
+      roughness: 0.65
     });
     const leg = new THREE.Mesh(legGeo, legMat);
-    leg.position.y = 0.5;
+    leg.position.y = 0.475;
     leg.castShadow = true;
     this.scene.add(leg);
 
-    // 3. Centerpiece: Munch Clover Terrarium
-    const centerPlateGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.05, 32);
+    // 3. Centerpiece: Munch Clover Terrarium Plate
+    const centerPlateGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.04, 24);
     const centerPlateMat = new THREE.MeshStandardMaterial({
-      color: this.isDarkTheme ? 0x2b3854 : 0xebdecb,
+      color: this.isDarkTheme ? 0x2f3c57 : 0xe8dcce,
       roughness: 0.3
     });
     const plate = new THREE.Mesh(centerPlateGeo, centerPlateMat);
-    plate.position.y = 1.08;
+    plate.position.y = 1.03;
     this.scene.add(plate);
 
-    // Center Clover Emblem Dome
-    const domeGeo = new THREE.SphereGeometry(0.45, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    // Center Clover Dome (Translucent glowing dome)
+    const domeGeo = new THREE.SphereGeometry(0.4, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
     const domeMat = new THREE.MeshPhysicalMaterial({
       color: 0x8fd9a8,
       transparent: true,
-      opacity: 0.75,
-      roughness: 0.1,
-      transmission: 0.8,
+      opacity: 0.8,
+      roughness: 0.15,
+      transmission: 0.85,
       ior: 1.4
     });
     const dome = new THREE.Mesh(domeGeo, domeMat);
-    dome.position.y = 1.1;
+    dome.position.y = 1.05;
     this.scene.add(dome);
   }
 
   private calculateSeats() {
-    // 10 Seats evenly spaced around circle:
-    // Index 0: User (South position at 0 radians)
-    // Indices 1 - 9: Munch, Ollie, Ellie, Pandy, Dobby, Coco, Froggy, Bubbles, Chicky
+    // 10 Seats evenly spaced around the circular table
     const characters: Array<{ id: MascotCharacter | 'user'; name: string; color: number }> = [
       { id: 'user', name: 'You', color: 0x8fd9a8 },
       { id: 'munch', name: 'Munch', color: 0x8fd9a8 },
       { id: 'ollie', name: 'Ollie', color: 0xcdb4ff },
       { id: 'ellie', name: 'Ellie', color: 0xbce3ff },
-      { id: 'pandy', name: 'Pandy', color: 0x4a4a4a },
+      { id: 'pandy', name: 'Pandy', color: 0x5a5a5a },
       { id: 'dobby', name: 'Dobby', color: 0xead5c3 },
       { id: 'coco', name: 'Coco', color: 0xffaf7a },
       { id: 'froggy', name: 'Froggy', color: 0x8fd9a8 },
@@ -249,16 +262,16 @@ export class Table3DScene {
       { id: 'chicky', name: 'Chicky', color: 0xffe08a }
     ];
 
-    const radius = 3.2;
+    const radius = 3.15;
     const count = characters.length; // 10
 
     this.seats = characters.map((c, i) => {
-      // User is placed at -Math.PI / 2 (front/bottom of table relative to default camera)
+      // User is placed at South position (front of table facing North)
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / count;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
       const pos = new THREE.Vector3(x, 0, z);
-      const lookAt = new THREE.Vector3(0, 1.0, 0); // look at table center
+      const lookAt = new THREE.Vector3(0, 0.95, 0); // look toward table center
 
       return {
         characterId: c.id,
@@ -272,7 +285,6 @@ export class Table3DScene {
   }
 
   private setupCharacters() {
-    // For each mascot, build a charming procedural 3D avatar
     for (const seat of this.seats) {
       if (seat.characterId === 'user') {
         // User Seat Cushion / Stool
@@ -286,12 +298,12 @@ export class Table3DScene {
       const mascotId = seat.characterId as MascotCharacter;
       const charGroup = new THREE.Group();
       charGroup.position.copy(seat.position);
-      charGroup.position.y = 0.5; // seated height
+      charGroup.position.y = 0.48; // seated height
       charGroup.lookAt(seat.lookAt);
 
       // 1. Seat Stool
       const stool = this.buildStoolMesh(seat.color);
-      stool.position.set(0, -0.5, 0);
+      stool.position.set(0, -0.48, 0);
       charGroup.add(stool);
 
       // 2. Character Model Geometry
@@ -299,7 +311,7 @@ export class Table3DScene {
       charGroup.add(avatarBody);
 
       // 3. Selection Halo / Glow ring under character
-      const haloGeo = new THREE.RingGeometry(0.4, 0.48, 32);
+      const haloGeo = new THREE.RingGeometry(0.38, 0.46, 24);
       const haloMat = new THREE.MeshBasicMaterial({
         color: seat.color,
         transparent: true,
@@ -309,7 +321,7 @@ export class Table3DScene {
       const halo = new THREE.Mesh(haloGeo, haloMat);
       halo.name = 'halo';
       halo.rotation.x = -Math.PI / 2;
-      halo.position.y = -0.48;
+      halo.position.y = -0.46;
       charGroup.add(halo);
 
       this.charactersGroup.add(charGroup);
@@ -321,26 +333,26 @@ export class Table3DScene {
 
   private buildStoolMesh(accentColor: number): THREE.Group {
     const stool = new THREE.Group();
-    const cushionGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.1, 24);
+    const cushionGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.09, 24);
     const cushionMat = new THREE.MeshStandardMaterial({
       color: accentColor,
-      roughness: 0.6
+      roughness: 0.55
     });
     const cushion = new THREE.Mesh(cushionGeo, cushionMat);
-    cushion.position.y = 0.45;
+    cushion.position.y = 0.44;
     cushion.castShadow = true;
     stool.add(cushion);
 
-    const legGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.45, 12);
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.5 });
+    const legGeo = new THREE.CylinderGeometry(0.035, 0.05, 0.44, 12);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x3d3d3d, roughness: 0.5 });
     const leg1 = new THREE.Mesh(legGeo, legMat);
-    leg1.position.set(0.18, 0.225, 0.18);
+    leg1.position.set(0.16, 0.22, 0.16);
     stool.add(leg1);
     const leg2 = new THREE.Mesh(legGeo, legMat);
-    leg2.position.set(-0.18, 0.225, 0.18);
+    leg2.position.set(-0.16, 0.22, 0.16);
     stool.add(leg2);
     const leg3 = new THREE.Mesh(legGeo, legMat);
-    leg3.position.set(0, 0.225, -0.22);
+    leg3.position.set(0, 0.22, -0.2);
     stool.add(leg3);
 
     return stool;
@@ -352,194 +364,247 @@ export class Table3DScene {
 
     const bodyMat = new THREE.MeshStandardMaterial({
       color: mainColor,
-      roughness: 0.5,
+      roughness: 0.45,
       metalness: 0.05
     });
 
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2 });
     const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
     const cheekMat = new THREE.MeshStandardMaterial({ color: 0xffcfb3, roughness: 0.7 });
 
     // Base Round Soft Body
-    const bodyGeo = new THREE.SphereGeometry(0.42, 32, 24);
+    const bodyGeo = new THREE.SphereGeometry(0.4, 24, 20);
     bodyGeo.scale(1.0, 1.05, 0.95);
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-    bodyMesh.position.y = 0.42;
+    bodyMesh.position.y = 0.4;
     bodyMesh.castShadow = true;
     avatar.add(bodyMesh);
 
     // Eyes
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), eyeMat);
-    eyeL.position.set(-0.13, 0.46, 0.37);
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), eyeMat);
+    eyeL.position.set(-0.12, 0.44, 0.35);
     avatar.add(eyeL);
-    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), eyeMat);
-    eyeR.position.set(0.13, 0.46, 0.37);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), eyeMat);
+    eyeR.position.set(0.12, 0.44, 0.35);
     avatar.add(eyeR);
 
     // Cheeks
-    const cheekL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), cheekMat);
+    const cheekL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), cheekMat);
     cheekL.scale.set(1, 0.6, 0.5);
-    cheekL.position.set(-0.21, 0.38, 0.33);
+    cheekL.position.set(-0.2, 0.36, 0.31);
     avatar.add(cheekL);
-    const cheekR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), cheekMat);
+    const cheekR = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), cheekMat);
     cheekR.scale.set(1, 0.6, 0.5);
-    cheekR.position.set(0.21, 0.38, 0.33);
+    cheekR.position.set(0.2, 0.36, 0.31);
     avatar.add(cheekR);
 
-    // Species-Specific 3D Details
+    // Mascot-Specific 3D Geometry Details
     if (characterId === 'munch') {
-      // Four Leaf Clover on Top
-      const leafGeo = new THREE.SphereGeometry(0.14, 16, 16);
-      leafGeo.scale(1, 0.3, 1.3);
+      const leafGeo = new THREE.SphereGeometry(0.13, 12, 12);
+      leafGeo.scale(1, 0.3, 1.25);
       for (let i = 0; i < 4; i++) {
         const leaf = new THREE.Mesh(leafGeo, bodyMat);
-        leaf.position.set(0, 0.88, 0);
+        leaf.position.set(0, 0.84, 0);
         leaf.rotation.y = (i * Math.PI) / 2;
         leaf.rotation.x = 0.35;
         avatar.add(leaf);
       }
     } else if (characterId === 'ollie') {
-      // Owl Horns/Ears & Beak
-      const hornGeo = new THREE.ConeGeometry(0.1, 0.22, 12);
+      const hornGeo = new THREE.ConeGeometry(0.09, 0.2, 10);
       const hornL = new THREE.Mesh(hornGeo, bodyMat);
-      hornL.position.set(-0.24, 0.85, 0.05);
+      hornL.position.set(-0.22, 0.8, 0.05);
       hornL.rotation.z = 0.25;
       avatar.add(hornL);
       const hornR = new THREE.Mesh(hornGeo, bodyMat);
-      hornR.position.set(0.24, 0.85, 0.05);
+      hornR.position.set(0.22, 0.8, 0.05);
       hornR.rotation.z = -0.25;
       avatar.add(hornR);
-      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 8), new THREE.MeshStandardMaterial({ color: 0xffe08a }));
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.11, 8), new THREE.MeshStandardMaterial({ color: 0xffe08a }));
       beak.rotation.x = Math.PI / 2;
-      beak.position.set(0, 0.39, 0.42);
+      beak.position.set(0, 0.37, 0.4);
       avatar.add(beak);
     } else if (characterId === 'ellie') {
-      // Big Ears & Trunk
-      const earGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.05, 24);
+      const earGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.04, 20);
       const earL = new THREE.Mesh(earGeo, bodyMat);
-      earL.position.set(-0.48, 0.5, -0.05);
+      earL.position.set(-0.45, 0.48, -0.05);
       earL.rotation.y = 0.4;
       avatar.add(earL);
       const earR = new THREE.Mesh(earGeo, bodyMat);
-      earR.position.set(0.48, 0.5, -0.05);
+      earR.position.set(0.45, 0.48, -0.05);
       earR.rotation.y = -0.4;
       avatar.add(earR);
-      const trunk = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 12, 24, Math.PI), bodyMat);
-      trunk.position.set(0, 0.32, 0.36);
+      const trunk = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 10, 20, Math.PI), bodyMat);
+      trunk.position.set(0, 0.3, 0.34);
       trunk.rotation.x = Math.PI / 2;
       avatar.add(trunk);
     } else if (characterId === 'pandy') {
-      // Panda Ears & Patches
-      const earGeo = new THREE.SphereGeometry(0.12, 16, 16);
+      const earGeo = new THREE.SphereGeometry(0.11, 12, 12);
       const earL = new THREE.Mesh(earGeo, eyeMat);
-      earL.position.set(-0.28, 0.82, 0);
+      earL.position.set(-0.26, 0.78, 0);
       avatar.add(earL);
       const earR = new THREE.Mesh(earGeo, eyeMat);
-      earR.position.set(0.28, 0.82, 0);
+      earR.position.set(0.26, 0.78, 0);
       avatar.add(earR);
       bodyMesh.material = whiteMat;
     } else if (characterId === 'dobby') {
-      // Puppy Droopy Ears & Snout
-      const earGeo = new THREE.CylinderGeometry(0.08, 0.14, 0.35, 12);
-      const earL = new THREE.Mesh(earGeo, new THREE.MeshStandardMaterial({ color: 0xa77a50 }));
-      earL.position.set(-0.38, 0.52, 0.08);
+      const earGeo = new THREE.CylinderGeometry(0.07, 0.13, 0.32, 10);
+      const earMat = new THREE.MeshStandardMaterial({ color: 0xa77a50 });
+      const earL = new THREE.Mesh(earGeo, earMat);
+      earL.position.set(-0.35, 0.5, 0.07);
       earL.rotation.z = 0.5;
       avatar.add(earL);
-      const earR = new THREE.Mesh(earGeo, new THREE.MeshStandardMaterial({ color: 0xa77a50 }));
-      earR.position.set(0.38, 0.52, 0.08);
+      const earR = new THREE.Mesh(earGeo, earMat);
+      earR.position.set(0.35, 0.5, 0.07);
       earR.rotation.z = -0.5;
       avatar.add(earR);
-      const snout = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), whiteMat);
-      snout.position.set(0, 0.35, 0.38);
+      const snout = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), whiteMat);
+      snout.position.set(0, 0.33, 0.36);
       avatar.add(snout);
     } else if (characterId === 'coco') {
-      // Pointy Cat Ears
-      const earGeo = new THREE.ConeGeometry(0.14, 0.25, 12);
+      const earGeo = new THREE.ConeGeometry(0.13, 0.23, 10);
       const earL = new THREE.Mesh(earGeo, bodyMat);
-      earL.position.set(-0.24, 0.85, 0.05);
+      earL.position.set(-0.22, 0.8, 0.05);
       earL.rotation.z = 0.3;
       avatar.add(earL);
       const earR = new THREE.Mesh(earGeo, bodyMat);
-      earR.position.set(0.24, 0.85, 0.05);
+      earR.position.set(0.22, 0.8, 0.05);
       earR.rotation.z = -0.3;
       avatar.add(earR);
     } else if (characterId === 'froggy') {
-      // Elevated Frog Eyes
-      const eyeBulgeGeo = new THREE.SphereGeometry(0.14, 16, 16);
+      const eyeBulgeGeo = new THREE.SphereGeometry(0.13, 12, 12);
       const bulgeL = new THREE.Mesh(eyeBulgeGeo, bodyMat);
-      bulgeL.position.set(-0.25, 0.72, 0.1);
+      bulgeL.position.set(-0.23, 0.68, 0.1);
       avatar.add(bulgeL);
       const bulgeR = new THREE.Mesh(eyeBulgeGeo, bodyMat);
-      bulgeR.position.set(0.25, 0.72, 0.1);
+      bulgeR.position.set(0.23, 0.68, 0.1);
       avatar.add(bulgeR);
-      eyeL.position.set(-0.25, 0.74, 0.22);
-      eyeR.position.set(0.25, 0.74, 0.22);
+      eyeL.position.set(-0.23, 0.7, 0.21);
+      eyeR.position.set(0.23, 0.7, 0.21);
     } else if (characterId === 'bubbles') {
-      // Fish Dorsal & Tail Fin
-      const finGeo = new THREE.ConeGeometry(0.12, 0.3, 12);
-      const dorsal = new THREE.Mesh(finGeo, new THREE.MeshStandardMaterial({ color: 0xffe08a }));
-      dorsal.position.set(0, 0.88, -0.05);
+      const finGeo = new THREE.ConeGeometry(0.11, 0.28, 10);
+      const finMat = new THREE.MeshStandardMaterial({ color: 0xffe08a });
+      const dorsal = new THREE.Mesh(finGeo, finMat);
+      dorsal.position.set(0, 0.84, -0.05);
       dorsal.rotation.x = -0.4;
       avatar.add(dorsal);
-      const tail = new THREE.Mesh(finGeo, new THREE.MeshStandardMaterial({ color: 0xffe08a }));
-      tail.position.set(0, 0.42, -0.48);
+      const tail = new THREE.Mesh(finGeo, finMat);
+      tail.position.set(0, 0.4, -0.45);
       tail.rotation.x = Math.PI / 2;
       avatar.add(tail);
     } else if (characterId === 'chicky') {
-      // Comb & Beak
-      const comb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshStandardMaterial({ color: 0xff8e8e }));
-      comb.scale.set(0.5, 1.4, 0.8);
-      comb.position.set(0, 0.88, 0.05);
+      const comb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), new THREE.MeshStandardMaterial({ color: 0xff8e8e }));
+      comb.scale.set(0.5, 1.3, 0.75);
+      comb.position.set(0, 0.84, 0.05);
       avatar.add(comb);
-      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.14, 8), new THREE.MeshStandardMaterial({ color: 0xffa726 }));
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.13, 8), new THREE.MeshStandardMaterial({ color: 0xffa726 }));
       beak.rotation.x = Math.PI / 2;
-      beak.position.set(0, 0.38, 0.42);
+      beak.position.set(0, 0.36, 0.4);
       avatar.add(beak);
     }
 
     return avatar;
   }
 
+  // Unified Pointer & Touch Event Handling for Orbit and Parallax
   private setupEventListeners() {
     window.addEventListener('resize', this.onWindowResize);
-    this.container.addEventListener('mousemove', this.onMouseMove);
+
+    const dom = this.container;
+    dom.addEventListener('pointerdown', this.onPointerDown);
+    window.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerUp);
+    dom.addEventListener('wheel', this.onWheel, { passive: true });
   }
 
   private onWindowResize = () => {
     if (!this.container) return;
-    const width = this.container.clientWidth;
+    const width = Math.max(this.container.clientWidth, 1);
     const height = Math.max(this.container.clientHeight, 1);
+    const aspect = width / height;
+    const isMobile = aspect < 1.0;
 
-    this.camera.aspect = width / height;
+    this.camera.aspect = aspect;
+    this.camera.fov = isMobile ? 48 : 38;
     this.camera.updateProjectionMatrix();
+
+    if (this.cameraViewMode === 'overview') {
+      this.targetSpherical.radius = isMobile ? 8.6 : 7.2;
+    }
+
     this.renderer.setSize(width, height);
   };
 
-  private onMouseMove = (e: MouseEvent) => {
-    if (this.isReducedMotion) return;
-    const rect = this.container.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    this.mouse.targetX = x * 1.5;
-    this.mouse.targetY = y * 1.0;
+  private onPointerDown = (e: PointerEvent) => {
+    // Only drag with primary mouse button or touch
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    this.isPointerDown = true;
+    this.pointerStart.x = e.clientX;
+    this.pointerStart.y = e.clientY;
   };
 
-  // State & Lighting Updates
+  private onPointerMove = (e: PointerEvent) => {
+    if (this.isPointerDown) {
+      const deltaX = e.clientX - this.pointerStart.x;
+      const deltaY = e.clientY - this.pointerStart.y;
+      this.pointerStart.x = e.clientX;
+      this.pointerStart.y = e.clientY;
+
+      // Snappy orbit update
+      this.targetSpherical.theta -= deltaX * 0.0055;
+      this.targetSpherical.phi -= deltaY * 0.0055;
+
+      // Clamp polar angle so table cannot flip upside down (between ~20 deg and ~80 deg)
+      this.targetSpherical.phi = Math.max(0.35, Math.min(1.40, this.targetSpherical.phi));
+    } else if (!this.isReducedMotion) {
+      // Subtle mouse-follow parallax when idle
+      const rect = this.container.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / Math.max(rect.width, 1) - 0.5;
+      const y = (e.clientY - rect.top) / Math.max(rect.height, 1) - 0.5;
+      this.mouseParallax.targetX = x * 0.35;
+      this.mouseParallax.targetY = y * 0.2;
+    }
+  };
+
+  private onPointerUp = () => {
+    this.isPointerDown = false;
+  };
+
+  private onWheel = (e: WheelEvent) => {
+    const zoomDelta = e.deltaY * 0.003;
+    this.targetSpherical.radius = Math.max(5.2, Math.min(9.5, this.targetSpherical.radius + zoomDelta));
+  };
+
+  private updateCameraPositionDirect() {
+    // Convert spherical coordinates to Cartesian Vector3
+    const r = this.spherical.radius;
+    const phi = this.spherical.phi;
+    const theta = this.spherical.theta;
+
+    const sinPhiRadius = r * Math.sin(phi);
+    const x = sinPhiRadius * Math.sin(theta);
+    const y = r * Math.cos(phi);
+    const z = sinPhiRadius * Math.cos(theta);
+
+    this.camera.position.set(x, y, z);
+    this.camera.lookAt(this.currentLookAt);
+  }
+
+  // Theme & Perspective Modes
   public updateTheme(isDark: boolean) {
     this.isDarkTheme = isDark;
-    this.updateBackgroundTheme(isDark);
 
     if (this.ambientLight) {
-      this.ambientLight.color.setHex(isDark ? 0x6a7d9b : 0xfff2e0);
-      this.ambientLight.intensity = isDark ? 0.7 : 1.2;
+      this.ambientLight.color.setHex(isDark ? 0x8295b3 : 0xfff6ea);
+      this.ambientLight.intensity = isDark ? 0.9 : 1.3;
     }
     if (this.mainLight) {
-      this.mainLight.color.setHex(isDark ? 0x93b4ff : 0xfff6ea);
-      this.mainLight.intensity = isDark ? 1.0 : 1.6;
+      this.mainLight.color.setHex(isDark ? 0xaad0ff : 0xfffaf0);
+      this.mainLight.intensity = isDark ? 1.2 : 1.7;
     }
     if (this.tableSpotlight) {
-      this.tableSpotlight.color.setHex(isDark ? 0x8fd9a8 : 0xffe08a);
-      this.tableSpotlight.intensity = isDark ? 1.5 : 1.8;
+      this.tableSpotlight.color.setHex(isDark ? 0x8fd9a8 : 0xffebad);
+      this.tableSpotlight.intensity = isDark ? 1.6 : 1.9;
     }
   }
 
@@ -549,20 +614,28 @@ export class Table3DScene {
 
   public setCameraMode(mode: CameraViewMode) {
     this.cameraViewMode = mode;
+    const aspect = this.container ? this.container.clientWidth / Math.max(this.container.clientHeight, 1) : 1;
+    const isMobile = aspect < 1.0;
+
     if (mode === 'overview') {
-      this.targetCameraPos.set(0, 5.5, 7.5);
-      this.targetLookAt.set(0, 0.5, 0);
+      this.targetSpherical.radius = isMobile ? 8.6 : 7.2;
+      this.targetSpherical.phi = 0.88;
+      this.targetSpherical.theta = 0;
+      this.targetLookAt.set(0, 0.85, 0);
     } else if (mode === 'user_pov') {
-      // Seated right at User Seat position looking directly across table
-      this.targetCameraPos.set(0, 1.7, -3.2);
-      this.targetLookAt.set(0, 1.2, 1.5);
+      // Perspective from User seat looking across the circle
+      this.targetSpherical.radius = 4.8;
+      this.targetSpherical.phi = 1.2;
+      this.targetSpherical.theta = 0;
+      this.targetLookAt.set(0, 1.1, 1.2);
     } else if (mode === 'speaker' && this.activeSpeakerId && this.activeSpeakerId !== 'user') {
-      const seat = this.seats.find(s => s.characterId === this.activeSpeakerId);
+      const seat = this.seats.find((s) => s.characterId === this.activeSpeakerId);
       if (seat) {
-        // Position camera to frame speaker warmly
-        const dir = seat.position.clone().normalize();
-        this.targetCameraPos.set(dir.x * 5.0, 3.8, dir.z * 5.0);
-        this.targetLookAt.copy(seat.position).add(new THREE.Vector3(0, 0.6, 0));
+        // Center camera angle on the active speaker
+        this.targetSpherical.theta = seat.angle + Math.PI / 2;
+        this.targetSpherical.radius = isMobile ? 6.5 : 5.6;
+        this.targetSpherical.phi = 1.05;
+        this.targetLookAt.copy(seat.position).add(new THREE.Vector3(0, 0.5, 0));
       }
     }
   }
@@ -570,7 +643,7 @@ export class Table3DScene {
   public setActiveSpeaker(speakerId: MascotCharacter | 'user' | null) {
     this.activeSpeakerId = speakerId;
 
-    // Reset previous halos
+    // Update Halos under characters
     for (const [charId, group] of this.characterMeshes.entries()) {
       const halo = group.getObjectByName('halo') as THREE.Mesh;
       if (halo && halo.material instanceof THREE.MeshBasicMaterial) {
@@ -578,12 +651,12 @@ export class Table3DScene {
       }
     }
 
-    // Update speaker spotlight
+    // Update Speaker Focus Spotlight
     if (speakerId && speakerId !== 'user') {
-      const seat = this.seats.find(s => s.characterId === speakerId);
+      const seat = this.seats.find((s) => s.characterId === speakerId);
       if (seat) {
-        this.speakerLight.position.set(seat.position.x, 2.2, seat.position.z);
-        this.speakerLight.intensity = 2.5;
+        this.speakerLight.position.set(seat.position.x, 2.0, seat.position.z);
+        this.speakerLight.intensity = 2.4;
         this.speakerLight.color.setHex(seat.color);
         if (this.cameraViewMode === 'speaker') {
           this.setCameraMode('speaker');
@@ -602,30 +675,45 @@ export class Table3DScene {
     this.characterReactions.set(charId, reaction);
   }
 
-  // Animation Loop
+  // Animation Loop (Zero React Re-renders, 60-120fps direct hardware rendering)
   private startAnimationLoop() {
     const render = () => {
       this.animationFrameId = requestAnimationFrame(render);
       const delta = Math.min(this.clock.getDelta(), 0.1);
       const time = this.clock.getElapsedTime();
 
-      // 1. Mouse Parallax Smoothing
-      this.mouse.x += (this.mouse.targetX - this.mouse.x) * 0.05;
-      this.mouse.y += (this.mouse.targetY - this.mouse.y) * 0.05;
-
-      // 2. Camera Damping
-      if (!this.isReducedMotion) {
-        const parallaxOffset = new THREE.Vector3(this.mouse.x * 0.8, -this.mouse.y * 0.4, 0);
-        const desiredPos = this.targetCameraPos.clone().add(parallaxOffset);
-        this.camera.position.lerp(desiredPos, 0.04);
-      } else {
-        this.camera.position.lerp(this.targetCameraPos, 0.06);
+      // 1. Mouse Parallax Smoothing (when not actively dragging)
+      if (!this.isPointerDown && !this.isReducedMotion) {
+        this.mouseParallax.x += (this.mouseParallax.targetX - this.mouseParallax.x) * 0.1;
+        this.mouseParallax.y += (this.mouseParallax.targetY - this.mouseParallax.y) * 0.1;
       }
 
-      this.currentLookAt.lerp(this.targetLookAt, 0.05);
+      // 2. High-Performance Snappy Camera Interpolation (no lag/sluggish damping)
+      const lerpSpeed = 0.14;
+      this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * lerpSpeed;
+      this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * lerpSpeed;
+      this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * lerpSpeed;
+      this.currentLookAt.lerp(this.targetLookAt, lerpSpeed);
+
+      // Compute camera Cartesian position
+      const r = this.spherical.radius;
+      const phi = this.spherical.phi;
+      const theta = this.spherical.theta;
+
+      const sinPhiRadius = r * Math.sin(phi);
+      let posX = sinPhiRadius * Math.sin(theta);
+      let posY = r * Math.cos(phi);
+      let posZ = sinPhiRadius * Math.cos(theta);
+
+      if (!this.isPointerDown && !this.isReducedMotion) {
+        posX += this.mouseParallax.x;
+        posY -= this.mouseParallax.y;
+      }
+
+      this.camera.position.set(posX, posY, posZ);
       this.camera.lookAt(this.currentLookAt);
 
-      // 3. Characters Animation
+      // 3. Characters Visual Dynamics & Social Gestures
       for (const [charId, group] of this.characterMeshes.entries()) {
         const body = group.getObjectByName('avatar_body');
         if (!body) continue;
@@ -634,35 +722,32 @@ export class Table3DScene {
         const reaction = this.characterReactions.get(charId);
         const isSpeaking = this.activeSpeakerId === charId;
 
-        // Base breathing bob
         if (!this.isReducedMotion) {
-          const seat = this.seats.find(s => s.characterId === charId);
+          const seat = this.seats.find((s) => s.characterId === charId);
           const phase = (seat?.angle || 0) * 2;
-          const bob = Math.sin(time * 2.5 + phase) * 0.025;
+          const bob = Math.sin(time * 2.4 + phase) * 0.02;
 
           if (isSpeaking || state === 'speaking') {
-            // Speaking rhythm
-            body.position.y = 0.42 + Math.abs(Math.sin(time * 8)) * 0.07;
-            body.rotation.y = Math.sin(time * 4) * 0.08;
-            body.scale.set(1 + Math.sin(time * 8) * 0.04, 1 - Math.sin(time * 8) * 0.03, 1);
+            // Natural rhythmic speaking bob
+            body.position.y = 0.4 + Math.abs(Math.sin(time * 7.5)) * 0.06;
+            body.rotation.y = Math.sin(time * 3.8) * 0.07;
+            body.scale.set(1 + Math.sin(time * 7.5) * 0.03, 1 - Math.sin(time * 7.5) * 0.02, 1);
           } else if (reaction === 'nod' || reaction === 'agree') {
-            // Nodding gesture
-            body.position.y = 0.42 + Math.sin(time * 7) * 0.05;
-            body.rotation.x = Math.sin(time * 7) * 0.15;
+            body.position.y = 0.4 + Math.sin(time * 6.5) * 0.04;
+            body.rotation.x = Math.sin(time * 6.5) * 0.12;
           } else if (reaction === 'cheer' || reaction === 'laugh') {
-            // Bouncy cheer
-            body.position.y = 0.42 + Math.abs(Math.sin(time * 9)) * 0.12;
-            body.rotation.z = Math.sin(time * 6) * 0.1;
+            body.position.y = 0.4 + Math.abs(Math.sin(time * 8.5)) * 0.1;
+            body.rotation.z = Math.sin(time * 5.5) * 0.08;
           } else if (reaction === 'surprised' || state === 'interrupted') {
             // Recoil
-            body.position.y = 0.48;
-            body.rotation.x = -0.15;
+            body.position.y = 0.46;
+            body.rotation.x = -0.14;
           } else if (state === 'thinking') {
-            body.position.y = 0.46 + Math.sin(time * 1.5) * 0.02;
-            body.rotation.z = 0.1;
+            body.position.y = 0.44 + Math.sin(time * 1.5) * 0.015;
+            body.rotation.z = 0.08;
           } else {
-            // Normal gentle breathing
-            body.position.y = 0.42 + bob;
+            // Normal gentle resting breath
+            body.position.y = 0.4 + bob;
             body.rotation.x = 0;
             body.rotation.z = 0;
           }
@@ -680,9 +765,16 @@ export class Table3DScene {
       cancelAnimationFrame(this.animationFrameId);
     }
     window.removeEventListener('resize', this.onWindowResize);
-    this.container.removeEventListener('mousemove', this.onMouseMove);
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerUp);
 
-    // Dispose geometries, materials, and renderer
+    const dom = this.container;
+    if (dom) {
+      dom.removeEventListener('pointerdown', this.onPointerDown);
+      dom.removeEventListener('wheel', this.onWheel);
+    }
+
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry?.dispose();
