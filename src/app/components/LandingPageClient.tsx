@@ -6,13 +6,14 @@ import { ArrowRight, ChevronRight, Sparkles } from 'lucide-react'
 import Mascot, { MascotCharacter, MascotExpression } from '@/components/Mascot'
 import { motion, AnimatePresence } from 'framer-motion'
 
+import AmbientBackground from '@/components/motion/AmbientBackground'
+
 export default function LandingPageClient() {
   const [character, setCharacter] = useState<MascotCharacter>('munch')
   const [expression, setExpression] = useState<MascotExpression>('happy')
   const [scene, setScene] = useState<string>('default')
   const [greeting, setGreeting] = useState<string>('Hello, traveler.')
   const [envelopeOpen, setEnvelopeOpen] = useState(false)
-  const [particles, setParticles] = useState<{ id: number; char: string; left: string; size: string; delay: number; duration: number }[]>([])
 
   // Selection configurations for logged-out users
   const mascots: MascotCharacter[] = ['munch', 'ollie', 'ellie', 'pandy', 'dobby', 'coco', 'froggy', 'bubbles', 'chicky']
@@ -48,24 +49,6 @@ export default function LandingPageClient() {
 
     setScene(resolvedScene)
     setGreeting(resolvedGreeting)
-
-    // Generate background particles
-    let pList: string[] = []
-    if (resolvedScene === 'morning_sun') pList = ['✨', '☀️', '✨']
-    else if (resolvedScene === 'afternoon_warmth') pList = ['🍀', '✨', '🍀']
-    else if (resolvedScene === 'twilight_glow') pList = ['✨', '⭐', '🌟']
-    else if (resolvedScene === 'midnight_peace') pList = ['⭐', '✨', '🌟', '✨']
-    else pList = ['🍀', '🍃', '🍀', '🍃']
-
-    const newParticles = Array.from({ length: 6 }).map((_, i) => ({
-      id: i,
-      char: pList[i % pList.length],
-      left: `${10 + Math.random() * 80}%`,
-      size: `${14 + Math.random() * 18}px`,
-      delay: Math.random() * 4,
-      duration: 12 + Math.random() * 12
-    }))
-    setParticles(newParticles)
   }, [])
 
   const bgClasses: Record<string, string> = {
@@ -82,35 +65,8 @@ export default function LandingPageClient() {
 
   return (
     <div className={`flex-1 min-h-screen flex flex-col relative transition-all duration-1000 bg-gradient-to-b ${bgClass}`}>
-      {/* Background clover/star particle systems */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
-        <AnimatePresence>
-          {particles.map((p) => (
-            <motion.div
-              key={`${scene}-${p.id}`}
-              initial={{ y: '105vh', opacity: 0, rotate: 0 }}
-              animate={{
-                y: '-10vh',
-                opacity: [0, 0.4, 0.4, 0],
-                rotate: 360
-              }}
-              transition={{
-                duration: p.duration,
-                delay: p.delay,
-                repeat: Infinity,
-                ease: 'linear'
-              }}
-              style={{
-                position: 'absolute',
-                left: p.left,
-                fontSize: p.size,
-              }}
-            >
-              {p.char}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* App-Wide Ambient Motion System */}
+      <AmbientBackground />
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col justify-start items-center px-4 py-12 sm:px-6 lg:px-8 max-w-lg mx-auto w-full z-10 space-y-12 relative">

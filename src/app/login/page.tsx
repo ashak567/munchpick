@@ -227,11 +227,14 @@ function LoginForm() {
   )
 }
 
+import AmbientBackground from '@/components/motion/AmbientBackground'
+
 export default function LoginPage() {
   return (
-    <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 max-w-md mx-auto w-full">
+    <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 max-w-md mx-auto w-full relative">
+      <AmbientBackground />
       {/* Brand Header */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-6 relative z-10">
         <Link href="/" className="inline-flex items-center gap-2 mb-2">
           <span className="text-4xl animate-float">🍀</span>
           <span className="font-display text-3xl font-bold tracking-tight text-primary-dark">
@@ -243,13 +246,15 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <Suspense fallback={
-        <div className="glass-panel rounded-3xl p-8 shadow-xl flex justify-center items-center h-64">
-          <div className="animate-spin text-4xl">🍀</div>
-        </div>
-      }>
-        <LoginForm />
-      </Suspense>
+      <div className="relative z-10">
+        <Suspense fallback={
+          <div className="glass-panel rounded-3xl p-8 shadow-xl flex justify-center items-center h-64">
+            <div className="animate-spin text-4xl">🍀</div>
+          </div>
+        }>
+          <LoginForm />
+        </Suspense>
+      </div>
     </div>
   )
 }

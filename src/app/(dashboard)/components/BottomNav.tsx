@@ -31,7 +31,7 @@ export default function BottomNav() {
         height: 'var(--bottom-nav-height)',
       }}
     >
-      <div className="glass-panel border border-white/50 rounded-2xl py-2 px-4 shadow-lg flex items-center justify-around h-full">
+      <div className="glass-panel border border-white/50 dark:border-white/10 rounded-2xl py-2 px-4 shadow-lg flex items-center justify-around h-full">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href
@@ -44,15 +44,15 @@ export default function BottomNav() {
               <div
                 className={`p-1.5 rounded-lg transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary text-primary-dark scale-110 shadow-sm'
-                    : 'text-charcoal/60 group-hover:text-charcoal/90 group-hover:scale-105'
+                    ? 'bg-primary dark:bg-primary/30 text-primary-dark dark:text-emerald-300 scale-110 shadow-sm'
+                    : 'text-charcoal/60 dark:text-slate-400 group-hover:text-charcoal/90 dark:group-hover:text-white group-hover:scale-105'
                 }`}
               >
                 <Icon className="w-5 h-5" />
               </div>
               <span
                 className={`text-[10px] font-medium transition-colors ${
-                  isActive ? 'text-primary-dark font-semibold' : 'text-charcoal/50 group-hover:text-charcoal/70'
+                  isActive ? 'text-primary-dark dark:text-emerald-300 font-semibold' : 'text-charcoal/50 dark:text-slate-400 group-hover:text-charcoal/70 dark:group-hover:text-slate-200'
                 }`}
               >
                 {item.label}

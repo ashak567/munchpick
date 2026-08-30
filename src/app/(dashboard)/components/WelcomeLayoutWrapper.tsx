@@ -34,8 +34,8 @@ export default function WelcomeLayoutWrapper({ children }: { children: React.Rea
         resolvedTheme === 'dark' || scene === 'midnight_peace' ? 'dark-theme' : ''
       } ${bgClass}`}
     >
-      {/* Background Particles */}
-      {!isChatRoute && <AmbientBackground />}
+      {/* App-Wide Ambient Motion System */}
+      <AmbientBackground />
 
       {/* Main Workspace Inner content */}
       <div className="flex-1 flex flex-col relative z-10 min-h-0 h-full overflow-hidden">

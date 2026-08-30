@@ -1,7 +1,7 @@
 export interface NavigationItem {
-  id: 'home' | 'journal' | 'companion' | 'settings';
+  id: 'home' | 'table' | 'journal' | 'companion' | 'settings';
   label: string;
-  iconName: 'Home' | 'BookOpen' | 'MessageSquare' | 'User';
+  iconName: 'Home' | 'Users' | 'BookOpen' | 'MessageSquare' | 'User';
   href: string;
 }
 
@@ -11,6 +11,12 @@ export const WORKSPACE_NAVIGATION_CONFIG: NavigationItem[] = [
     label: 'Home',
     iconName: 'Home',
     href: '/dashboard'
+  },
+  {
+    id: 'table',
+    label: 'Munch Table',
+    iconName: 'Users',
+    href: '/table'
   },
   {
     id: 'journal',

@@ -112,18 +112,18 @@ export default function DashboardShell({
       {/* ── Main content column ───────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden h-full min-h-0">
         {/* Mobile-only Top App Bar */}
-        <header className="lg:hidden sticky top-0 z-40 glass-panel border-b border-white/40 px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <header className="lg:hidden sticky top-0 z-40 glass-panel border-b border-white/40 dark:border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
           <Link href="/dashboard" className="flex items-center gap-1.5">
             <span className="text-2xl">🍀</span>
-            <span className="font-display text-xl font-bold text-primary-dark">
+            <span className="font-display text-xl font-bold text-primary-dark dark:text-emerald-300">
               Munch
             </span>
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-charcoal/70 hidden sm:inline">
-              Hi, <span className="font-semibold text-charcoal">{userName}</span>
+            <span className="text-xs text-charcoal/70 dark:text-slate-300 hidden sm:inline">
+              Hi, <span className="font-semibold text-charcoal dark:text-slate-100">{userName}</span>
             </span>
-            <div className="w-8 h-8 rounded-full bg-secondary text-secondary-dark flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-secondary text-secondary-dark flex items-center justify-center font-bold text-sm border-2 border-white dark:border-slate-800 shadow-sm">
               {userInitial}
             </div>
           </div>

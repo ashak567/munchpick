@@ -21,6 +21,8 @@ const registerSchema = z.object({
 
 type RegisterInputs = z.infer<typeof registerSchema>
 
+import AmbientBackground from '@/components/motion/AmbientBackground'
+
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -83,9 +85,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 max-w-md mx-auto w-full">
+    <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 max-w-md mx-auto w-full relative">
+      <AmbientBackground />
       {/* Brand Header */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-6 relative z-10">
         <Link href="/" className="inline-flex items-center gap-2 mb-2">
           <span className="text-4xl animate-float">🍀</span>
           <span className="font-display text-3xl font-bold tracking-tight text-primary-dark">
@@ -98,7 +101,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Main Glass Card */}
-      <div className="glass-panel rounded-3xl p-8 shadow-xl">
+      <div className="glass-panel rounded-3xl p-8 shadow-xl relative z-10">
         {/* Mascot Greeting */}
         <div className="flex items-center gap-4 bg-white/50 border border-white/60 rounded-2xl p-4 mb-6 relative overflow-hidden">
           <Mascot character="munch" expression="happy" size="sm" className="flex-shrink-0" />

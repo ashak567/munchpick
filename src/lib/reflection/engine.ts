@@ -27,6 +27,7 @@ import { EmotionRegulationEngine } from '../emotion/regulation';
 import { EmotionDynamicsEngine } from '../emotion/dynamics';
 import { ContextAssemblyEngine } from './context-assembly';
 import { PromptBuilderEngine } from './prompt-builder';
+import { MASCOT_SELF_IDENTITIES } from '../mascots/self-identity';
 
 export {
   StoryEngine,
@@ -800,6 +801,24 @@ export class ReflectionEngine implements CognitiveEngine {
           type: 'general'
         });
       }
+    }
+
+    // 4.10 Incorporate Character Self-Reference Observations
+    const selfRefObs = (context.observations || []).find((o: any) => o.agent_name === 'nlu' && o.key === 'self_references');
+    const selfRefList = selfRefObs?.value || [];
+    if (selfRefList.length > 0 && selfRefList[0].is_self_reference) {
+      const ref = selfRefList[0];
+      const identity = MASCOT_SELF_IDENTITIES[ref.character_id as MascotCharacter] || MASCOT_SELF_IDENTITIES.munch;
+      const insight = `User is directly referencing or addressing ${identity.displayName} (${identity.species}) with phrase "${ref.reference_phrase}".`;
+      const guidance = `Acknowledge this self-discussion naturally as ${identity.displayName} with authentic personality and warm self-awareness (${identity.selfAwarenessPersona}).`;
+      reflections.unshift({
+        observation: ref.contextual_summary || `Self-reference to ${identity.displayName}`,
+        insight,
+        guidance,
+        reflection: `${insight} ${guidance}`.trim(),
+        confidence: ref.confidence || 0.95,
+        type: 'general'
+      });
     }
 
     // 5. Default General Reflection if none generated

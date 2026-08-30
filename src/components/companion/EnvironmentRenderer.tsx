@@ -30,8 +30,6 @@ const PALETTE_BG_COLORS: Record<string, string> = {
   yellow: 'rgba(255, 224, 138, 0.12)'
 };
 
-import AmbientBackground from '@/components/motion/AmbientBackground';
-
 export default function EnvironmentRenderer({ theme, children }: EnvironmentRendererProps) {
   const isReduced = theme.accessibility === 'reduced-motion';
   const isDark = theme.userPreference === 'dark';
@@ -94,9 +92,6 @@ export default function EnvironmentRenderer({ theme, children }: EnvironmentRend
           />
         </div>
       )}
-
-      {/* Ambient Motion Layer */}
-      <AmbientBackground isReduced={isReduced} />
 
       {/* Decorative environment content wrapper */}
       <div className="relative w-full h-full flex flex-col z-10 min-h-0 overflow-hidden">

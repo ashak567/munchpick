@@ -81,6 +81,52 @@ describe('Character Self-Identity & Self-Awareness Verification', () => {
       expect(res.isSelfReference).toBe(true);
       expect(res.mascotId).toBe('dobby');
     });
+    it('detects "I\'ve been working on MunchPick for weeks."', () => {
+      const res = detectSelfReference("I've been working on MunchPick for weeks.", 'munch');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('munch');
+    });
+
+    it('detects "MunchPick was such a pain to build."', () => {
+      const res = detectSelfReference("MunchPick was such a pain to build.", 'munch');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('munch');
+    });
+
+    it('detects "I was trying to fix you."', () => {
+      const res = detectSelfReference("I was trying to fix you.", 'munch');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('munch');
+    });
+
+    it('detects "you were difficult to build."', () => {
+      const res = detectSelfReference("you were difficult to build.", 'froggy');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('froggy');
+    });
+
+    it('detects "Munch, you\'re finally behaving."', () => {
+      const res = detectSelfReference("Munch, you're finally behaving.", 'munch');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('munch');
+    });
+
+    it('detects "Pandy, you\'re adorable."', () => {
+      const res = detectSelfReference("Pandy, you're adorable.", 'pandy');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('pandy');
+    });
+
+    it('detects "You gave me so much trouble." for active character Dobby', () => {
+      const res = detectSelfReference("You gave me so much trouble.", 'dobby');
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('dobby');
+    });
+
+    it('detects "my Munch"', () => {
+      const res = detectSelfReference("my Munch is the best", 'munch');
+      expect(res.isSelfReference).toBe(true);
+    });
   });
 
   describe('Alias and Contextual Nickname Recognition', () => {
@@ -114,8 +160,8 @@ describe('Character Self-Identity & Self-Awareness Verification', () => {
       expect(res.isSelfReference).toBe(false);
     });
 
-    it('correctly classifies "My friend uses a project called MunchPick" as external', () => {
-      const res = detectSelfReference('My friend uses a project called MunchPick', 'munch');
+    it('correctly classifies "My friend built a project called MunchPick" as external', () => {
+      const res = detectSelfReference('My friend built a project called MunchPick', 'munch');
       expect(res.isSelfReference).toBe(false);
     });
 
@@ -135,6 +181,17 @@ describe('Character Self-Identity & Self-Awareness Verification', () => {
       const res = detectSelfReference(input, 'pandy', history);
       expect(res.isSelfReference).toBe(true);
       expect(res.mascotId).toBe('pandy');
+    });
+
+    it('resolves "How do you feel about that?" in multi-turn self-awareness context', () => {
+      const history = [
+        { role: 'user', content: "MunchPick was such a pain to build." },
+        { role: 'assistant', content: "Oh no! I hope I was worth the effort! 🍀" }
+      ];
+      const input = "How do you feel about that?";
+      const res = detectSelfReference(input, 'munch', history);
+      expect(res.isSelfReference).toBe(true);
+      expect(res.mascotId).toBe('munch');
     });
   });
 });

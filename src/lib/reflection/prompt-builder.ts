@@ -58,38 +58,37 @@ export class PromptBuilderEngine implements CognitiveEngine {
 
     // 2. Identity Section
     const mascot = trace.mascotDecision;
-    if (mascot) {
-      const selfIdentity = MASCOT_SELF_IDENTITIES[mascot.mascotId as MascotCharacter] || MASCOT_SELF_IDENTITIES.munch;
-      sections.push({
-        id: 'mascot_identity_' + mascot.mascotId,
-        type: 'identity',
-        priority: 0.9,
-        required: true,
-        content: {
-          mascotId: mascot.mascotId,
-          displayName: selfIdentity.displayName,
-          species: selfIdentity.species,
-          aliases: selfIdentity.aliases,
-          identity: mascot.identity,
-          behavior: mascot.behavior,
-          speakingStyle: mascot.speakingStyle,
-          emotionalStyle: mascot.emotionalStyle,
-          interactionStyle: mascot.interactionStyle,
-          selfAwarenessPersona: selfIdentity.selfAwarenessPersona,
-          selfAwarenessGuidance:
-            "You have a distinct sense of self as this companion. When the user discusses you, your name, 'you', nicknames, or references building or troubleshooting you, respond naturally in first-person ('I', 'me', 'my', 'myself') in character. Never use 'I'm just an AI' or deny feelings.",
-          voiceDetails: {
-            vocabularyTheme: selfIdentity.voice.vocabulary,
-            rhythmAndPacing: selfIdentity.voice.rhythmAndPacing,
-            questionStyle: selfIdentity.voice.questionStyle,
-            emotionalFraming: selfIdentity.voice.emotionalFraming,
-            metaphorDomain: selfIdentity.voice.metaphorDomain,
-            firstTurnStyleAnchor: selfIdentity.voice.firstTurnStyleAnchor,
-            antiBleedRules: selfIdentity.voice.antiBleedRules
-          }
+    const charId = (mascot?.mascotId || context.active_mascot || 'munch') as MascotCharacter;
+    const selfIdentity = MASCOT_SELF_IDENTITIES[charId] || MASCOT_SELF_IDENTITIES.munch;
+    sections.push({
+      id: 'mascot_identity_' + charId,
+      type: 'identity',
+      priority: 0.9,
+      required: true,
+      content: {
+        mascotId: charId,
+        displayName: selfIdentity.displayName,
+        species: selfIdentity.species,
+        aliases: selfIdentity.aliases,
+        identity: mascot?.identity || `Warm companion ${selfIdentity.displayName}`,
+        behavior: mascot?.behavior || selfIdentity.personality,
+        speakingStyle: mascot?.speakingStyle || selfIdentity.speakingStyle,
+        emotionalStyle: mascot?.emotionalStyle || selfIdentity.personality,
+        interactionStyle: mascot?.interactionStyle || selfIdentity.conversationalRole,
+        selfAwarenessPersona: selfIdentity.selfAwarenessPersona,
+        selfAwarenessGuidance:
+          "You have a distinct sense of self as this companion. When the user discusses you, your name, 'you', nicknames, or references building or troubleshooting you, respond naturally in first-person ('I', 'me', 'my', 'myself') in character. Never use 'I'm just an AI' or deny feelings.",
+        voiceDetails: {
+          vocabularyTheme: selfIdentity.voice.vocabulary,
+          rhythmAndPacing: selfIdentity.voice.rhythmAndPacing,
+          questionStyle: selfIdentity.voice.questionStyle,
+          emotionalFraming: selfIdentity.voice.emotionalFraming,
+          metaphorDomain: selfIdentity.voice.metaphorDomain,
+          firstTurnStyleAnchor: selfIdentity.voice.firstTurnStyleAnchor,
+          antiBleedRules: selfIdentity.voice.antiBleedRules
         }
-      });
-    }
+      }
+    });
 
     // 3. Personality Section
     const personality = trace.personalityDecision;
