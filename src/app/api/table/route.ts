@@ -16,6 +16,7 @@ import {
 } from '@/lib/reflection/types';
 import {
   PersonalityEngine,
+  ResponsePlanningEngine,
   ContextAssemblyEngine,
   PromptBuilderEngine,
   runCognitivePipeline
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
       // Run Cognitive Pipeline using existing provider fallback (Gemini -> Groq -> OpenRouter)
       const pipeline: CognitiveEngine[] = [
         new PersonalityEngine(),
+        new ResponsePlanningEngine(),
         new ContextAssemblyEngine(),
         new PromptBuilderEngine()
       ];
