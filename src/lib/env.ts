@@ -30,6 +30,8 @@ const serverEnvSchema = clientEnvSchema.extend({
   OPENROUTER_MODEL: z.string().optional(),
   LLM_DEFAULT_PROVIDER: z.string().optional(),
   LLM_FALLBACK_PROVIDERS: z.string().optional(),
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +101,8 @@ function getServerEnv() {
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
     LLM_DEFAULT_PROVIDER: process.env.LLM_DEFAULT_PROVIDER,
     LLM_FALLBACK_PROVIDERS: process.env.LLM_FALLBACK_PROVIDERS,
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
   })
 
   if (!parsed.success) {

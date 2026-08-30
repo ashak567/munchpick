@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { serverEnv } from '@/lib/env'
 import { llmConfig, getApprovedGeminiModel } from '@/lib/llm/config'
 import { jsonNoStore } from '@/lib/api-headers'
+import { checkRateLimit, rateLimitExceededResponse } from '@/lib/rate-limit'
 
 const getGeminiModel = () => {
   const apiKey = serverEnv.GEMINI_API_KEY || ''
@@ -53,9 +54,22 @@ export async function POST(request: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 })
     }
 
+    const rateLimit = await checkRateLimit('journal', user.id)
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit)
+    }
+
     const { title, content } = await request.json()
-    if (!title?.trim() || !content?.trim()) {
-      return jsonNoStore({ error: 'Title and content are required.' }, { status: 400 })
+    if (!title || typeof title !== 'string' || !title.trim() || !content || typeof content !== 'string' || !content.trim()) {
+      return jsonNoStore({ error: 'Title and content are required non-empty strings.' }, { status: 400 })
+    }
+
+    if (title.length > 200) {
+      return jsonNoStore({ error: 'Title exceeds maximum length of 200 characters.' }, { status: 400 })
+    }
+
+    if (content.length > 10000) {
+      return jsonNoStore({ error: 'Content exceeds maximum length of 10,000 characters.' }, { status: 400 })
     }
 
     // 1. Get preferred mascot from user profile

@@ -255,6 +255,17 @@ export default function LoginPage() {
           <LoginForm />
         </Suspense>
       </div>
+
+      {/* Footer Legal Links */}
+      <footer className="mt-8 text-center text-3xs text-charcoal/40 relative z-10 flex items-center justify-center gap-4">
+        <Link href="/terms" className="hover:text-primary-dark transition-colors">
+          Terms of Service
+        </Link>
+        <span>•</span>
+        <Link href="/privacy" className="hover:text-primary-dark transition-colors">
+          Privacy Policy
+        </Link>
+      </footer>
     </div>
   )
 }

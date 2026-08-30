@@ -274,10 +274,19 @@ export default function LandingPageClient() {
         </div>
 
         {/* Footer */}
-        <footer className={`w-full text-center text-3xs pt-6 border-t ${
+        <footer className={`w-full text-center text-3xs pt-6 border-t flex flex-col sm:flex-row items-center justify-between gap-3 ${
           isDark ? 'text-white/35 border-white/5' : 'text-charcoal/30 border-charcoal/5'
         }`}>
-          Munch © {new Date().getFullYear()}. Built with love, clovers, and warm support.
+          <div>Munch © {new Date().getFullYear()}. Built with love, clovers, and warm support.</div>
+          <div className="flex items-center gap-4">
+            <Link href="/terms" className="hover:underline transition-colors">
+              Terms of Service
+            </Link>
+            <span>•</span>
+            <Link href="/privacy" className="hover:underline transition-colors">
+              Privacy Policy
+            </Link>
+          </div>
         </footer>
       </div>
     </div>

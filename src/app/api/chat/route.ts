@@ -32,6 +32,7 @@ import { LLMGateway } from '@/lib/llm/gateway';
 import { ResponseValidator } from '@/lib/validation/validator';
 import { ResponseExpressionEngine } from '@/lib/expression/engine';
 import { jsonNoStore } from '@/lib/api-headers';
+import { checkRateLimit, rateLimitExceededResponse } from '@/lib/rate-limit';
 
 function stripPromptContent(pkg?: PromptPackage) {
   if (!pkg) return undefined;
@@ -258,9 +259,18 @@ export async function POST(request: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
     }
 
+    const rateLimit = await checkRateLimit('chat', user.id);
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit);
+    }
+
     const { content, draftId } = await request.json();
-    if (!content || !content.trim()) {
+    if (!content || typeof content !== 'string' || !content.trim()) {
       return jsonNoStore({ error: 'Content cannot be empty.' }, { status: 400 });
+    }
+
+    if (content.length > 4000) {
+      return jsonNoStore({ error: 'Message exceeds maximum length of 4000 characters.' }, { status: 400 });
     }
 
     // 1. Retrieve active chat (deterministically pick latest updated)

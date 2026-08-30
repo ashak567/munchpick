@@ -206,6 +206,18 @@ export default function RegisterPage() {
               )}
             </div>
 
+            {/* Terms of Service & Privacy Policy Agreement */}
+            <p className="text-2xs text-charcoal/60 leading-relaxed text-center px-1">
+              By creating an account, you agree to our{' '}
+              <Link href="/terms" target="_blank" className="font-semibold text-primary-dark hover:underline">
+                Terms of Service
+              </Link>{' '}
+              and acknowledge our{' '}
+              <Link href="/privacy" target="_blank" className="font-semibold text-primary-dark hover:underline">
+                Privacy Policy
+              </Link>.
+            </p>
+
             {/* Submit Button */}
             <button
               type="submit"
@@ -268,6 +280,17 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+
+      {/* Footer Legal Links */}
+      <footer className="mt-8 text-center text-3xs text-charcoal/40 relative z-10 flex items-center justify-center gap-4">
+        <Link href="/terms" className="hover:text-primary-dark transition-colors">
+          Terms of Service
+        </Link>
+        <span>•</span>
+        <Link href="/privacy" className="hover:text-primary-dark transition-colors">
+          Privacy Policy
+        </Link>
+      </footer>
     </div>
   )
 }

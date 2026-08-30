@@ -6,6 +6,7 @@ import { analyzeAndDistillMemories } from '@/lib/memory/distiller'
 import { MunchContextBuilder } from '@/lib/context/builder'
 import { selectNickname } from '@/lib/nickname/service'
 import { jsonNoStore } from '@/lib/api-headers'
+import { checkRateLimit, rateLimitExceededResponse } from '@/lib/rate-limit'
 
 // Type definition for preference scores from database
 interface PreferenceRow {
@@ -43,6 +44,12 @@ export async function POST(request: NextRequest) {
       )
     }
     logStage(currentStage, 'SUCCESS', { user_id: user.id })
+
+    const rateLimit = await checkRateLimit('decisions', user.id)
+    if (!rateLimit.success) {
+      logStage(currentStage, 'FAILED', { reason: 'Rate limit exceeded' })
+      return rateLimitExceededResponse(rateLimit)
+    }
 
     // ── STAGE 2: Parse & Validate Payload ──
     currentStage = '2-PARSE-PAYLOAD'

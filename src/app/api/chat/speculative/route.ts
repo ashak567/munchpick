@@ -27,6 +27,7 @@ import {
   normalizeText
 } from '@/lib/reflection/speculative';
 import { jsonNoStore } from '@/lib/api-headers';
+import { checkRateLimit, rateLimitExceededResponse } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   let controller: AbortController | null = null;
@@ -38,6 +39,11 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return jsonNoStore({ error: 'Unauthorized.' }, { status: 401 });
+    }
+
+    const rateLimit = await checkRateLimit('speculative', user.id);
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit);
     }
 
     const { draftId: reqDraftId, chatId, partialText } = await request.json();

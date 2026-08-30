@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { logout } from '@/app/auth/actions'
 import { clearAssetCache } from '@/lib/assets-client'
+import Link from 'next/link'
 import { 
   LogOut, 
   Mail, 
@@ -17,7 +18,10 @@ import {
   Check,
   Sun,
   Moon,
-  Clock
+  Clock,
+  Shield,
+  FileText,
+  ExternalLink
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import Mascot from '@/components/Mascot'
@@ -492,6 +496,46 @@ export default function ProfilePage() {
                   />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Legal & Privacy Policy Section */}
+        <div className="glass-panel rounded-3xl p-6 shadow-sm border border-white/60">
+          <div className="flex items-center gap-2 text-primary-dark font-display font-black text-sm mb-4">
+            <Shield className="w-4 h-4" />
+            <span>Legal & Privacy Protection</span>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-2xs text-charcoal/60 leading-relaxed">
+              Munch is designed with strict database-level Row Level Security and privacy-first AI reflections. Your conversations, memories, and journal entries are isolated to your account.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <Link
+                href="/terms"
+                target="_blank"
+                className="p-3 rounded-2xl bg-white/60 hover:bg-white border border-charcoal/10 transition-colors flex items-center justify-between text-xs font-semibold text-charcoal/80 group"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary-dark" />
+                  <span>Terms of Service</span>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-charcoal/40 group-hover:text-primary-dark transition-colors" />
+              </Link>
+
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="p-3 rounded-2xl bg-white/60 hover:bg-white border border-charcoal/10 transition-colors flex items-center justify-between text-xs font-semibold text-charcoal/80 group"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-primary-dark" />
+                  <span>Privacy Policy</span>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-charcoal/40 group-hover:text-primary-dark transition-colors" />
+              </Link>
             </div>
           </div>
         </div>

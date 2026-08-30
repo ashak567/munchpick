@@ -18,8 +18,16 @@ export async function PUT(
     const { id } = await params
     const { title, content } = await request.json()
 
-    if (!title?.trim() || !content?.trim()) {
-      return jsonNoStore({ error: 'Title and content are required.' }, { status: 400 })
+    if (!title || typeof title !== 'string' || !title.trim() || !content || typeof content !== 'string' || !content.trim()) {
+      return jsonNoStore({ error: 'Title and content are required non-empty strings.' }, { status: 400 })
+    }
+
+    if (title.length > 200) {
+      return jsonNoStore({ error: 'Title exceeds maximum length of 200 characters.' }, { status: 400 })
+    }
+
+    if (content.length > 10000) {
+      return jsonNoStore({ error: 'Content exceeds maximum length of 10,000 characters.' }, { status: 400 })
     }
 
     const { data: entry, error } = await supabase

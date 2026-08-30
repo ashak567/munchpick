@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
+import { jsonNoStore } from '@/lib/api-headers';
 import {
   ALL_TABLE_CHARACTERS,
   generateSocialReactions,
@@ -22,14 +24,31 @@ import {
   runCognitivePipeline
 } from '@/lib/reflection/engine';
 import { LLMGateway } from '@/lib/llm/gateway';
+import { checkRateLimit, rateLimitExceededResponse } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return jsonNoStore({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
+    }
+
+    const rateLimit = await checkRateLimit('table', user.id);
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit);
+    }
+
     const body = await req.json();
     const { userMessage, history = [], currentTopic = 'Group Discussion' } = body;
 
-    if (!userMessage || typeof userMessage !== 'string') {
-      return NextResponse.json({ error: 'User message is required' }, { status: 400 });
+    if (!userMessage || typeof userMessage !== 'string' || !userMessage.trim()) {
+      return jsonNoStore({ error: 'User message is required.' }, { status: 400 });
+    }
+
+    if (userMessage.length > 2000) {
+      return jsonNoStore({ error: 'Message exceeds maximum length of 2000 characters.' }, { status: 400 });
     }
 
     // 1. Execute Structured Participation & Interruption Planner
@@ -106,7 +125,7 @@ export async function POST(req: NextRequest) {
       };
 
       const context: ContextPackage = {
-        user_id: 'table_session',
+        user_id: user.id,
         user_input: contextualInput,
         options: [],
         profile_beliefs: [],
@@ -182,14 +201,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       messages: messagesToReturn
     });
   } catch (err: any) {
     console.error('Table API Error:', err);
-    return NextResponse.json(
-      { error: 'Failed to process table discussion', details: err?.message },
+    return jsonNoStore(
+      { error: 'Failed to process table discussion.' },
       { status: 500 }
     );
   }
