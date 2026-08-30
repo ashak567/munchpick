@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.0.0",
+  "allowScripts": {
+    "sharp": true,
+    "unrs-resolver": true
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
