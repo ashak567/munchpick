@@ -44,13 +44,12 @@ export class Table3DScene {
   private targetSpherical = { radius: 7.2, phi: 0.88, theta: 0 };
   private targetLookAt = new THREE.Vector3(0, 0.85, 0);
   private currentLookAt = new THREE.Vector3(0, 0.85, 0);
-
-  // Interaction State
   private isPointerDown = false;
   private pointerStart = { x: 0, y: 0 };
   private mouseParallax = { x: 0, y: 0, targetX: 0, targetY: 0 };
   private isReducedMotion = false;
   private isDarkTheme = false;
+  private resizeObserver: ResizeObserver | null = null;
 
   // Seats: 9 characters + 1 user seat = 10 total seats
   public seats: SeatConfig[] = [];
@@ -509,6 +508,13 @@ export class Table3DScene {
   private setupEventListeners() {
     window.addEventListener('resize', this.onWindowResize);
 
+    if (typeof ResizeObserver !== 'undefined' && this.container) {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.onWindowResize();
+      });
+      this.resizeObserver.observe(this.container);
+    }
+
     const dom = this.container;
     dom.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointermove', this.onPointerMove);
@@ -764,6 +770,11 @@ export class Table3DScene {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+
     window.removeEventListener('resize', this.onWindowResize);
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);

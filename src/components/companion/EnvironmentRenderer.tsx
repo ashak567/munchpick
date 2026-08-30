@@ -34,20 +34,20 @@ export default function EnvironmentRenderer({ theme, children }: EnvironmentRend
   const isReduced = theme.accessibility === 'reduced-motion';
   const isDark = theme.userPreference === 'dark';
 
-  // Get background gradients according to time of day
+  // Get subtle atmospheric background tints that preserve AmbientBackground
   const getThemeGradient = () => {
     if (isDark || theme.time === 'night') {
-      return 'from-[#0C0F1A] via-[#151B30] to-[#0A0D14]';
+      return 'from-transparent via-slate-900/20 to-transparent';
     }
     switch (theme.time) {
       case 'morning':
-        return 'from-[#FFEAD1] via-[#FFF9F5] to-[#E3F2E9]';
+        return 'from-amber-100/10 via-transparent to-emerald-100/10';
       case 'afternoon':
-        return 'from-[#E3F2FD] via-[#FFF9F5] to-[#FFF9F5]';
+        return 'from-sky-100/10 via-transparent to-transparent';
       case 'evening':
-        return 'from-[#EDE7F6] via-[#FFF9F5] to-[#FFE0B2]';
+        return 'from-purple-100/10 via-transparent to-amber-100/10';
       default:
-        return 'from-[#FFF9F5] via-[#FFF9F5] to-[#FFF9F5]';
+        return 'from-transparent via-transparent to-transparent';
     }
   };
 

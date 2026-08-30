@@ -21,7 +21,7 @@ export default function DashboardShell({
   userInitial,
 }: DashboardShellProps) {
   const pathname = usePathname()
-  const isChatRoute = pathname === '/dashboard'
+  const isFullscreenStage = pathname === '/dashboard' || pathname === '/table'
 
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [preferredMascot, setPreferredMascot] = useState<any>('munch')
@@ -67,8 +67,8 @@ export default function DashboardShell({
     })
   }
 
-  // ── Chat route: full-screen with responsive navigation ─────────────────────
-  if (isChatRoute) {
+  // ── Full-screen Stages: /dashboard (chat) & /table (3D group discussion) ────
+  if (isFullscreenStage) {
     return (
       <div className="flex-1 flex overflow-hidden h-full w-full min-h-0">
         {/* Desktop Sidebar (lg+ only) */}
@@ -81,7 +81,7 @@ export default function DashboardShell({
           />
         </div>
 
-        {/* Chat Area */}
+        {/* Stage Content Area */}
         <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden relative">
           <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
             {children}
