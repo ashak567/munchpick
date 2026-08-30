@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Sparkles, History, MessageSquare, User } from 'lucide-react'
+import { Sparkles, History, MessageSquare, User, Users } from 'lucide-react'
 import { useResponsiveLayout } from '@/components/companion/LayoutManager'
 
 export default function BottomNav() {
@@ -12,6 +12,7 @@ export default function BottomNav() {
 
   const navItems = [
     { href: '/dashboard', label: 'Munch', icon: Sparkles },
+    { href: '/table', label: 'Table', icon: Users },
     { href: '/history', label: 'Journal', icon: History },
     { href: '/our-conversations', label: 'Conversations', icon: MessageSquare },
     { href: '/profile', label: 'Profile', icon: User },

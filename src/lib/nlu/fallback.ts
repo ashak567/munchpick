@@ -694,7 +694,7 @@ export function analyzeContextFallback(context: ContextPackage): NLUObservations
   // 21. Character Self-Reference & Disambiguation
   const self_references: SelfReferenceObservation[] = [];
   const activeChar = (context.active_mascot || 'munch') as MascotCharacter;
-  const historyTurns = (context.conversation_history || []).map(h => ({
+  const historyTurns = (context.conversation_history || []).map((h: any) => ({
     role: h.role,
     content: h.content
   }));
